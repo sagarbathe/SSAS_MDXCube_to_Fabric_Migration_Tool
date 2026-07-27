@@ -2,19 +2,32 @@
 Data mover: extracts rows from the on-prem relational source (the star
 schema tables underlying the SSAS cube) and writes them as Delta tables.
 
-Two write targets are supported:
- - local: writes Delta tables to a local folder (useful for dry-run /
-   validation without a Fabric workspace connection).
+Three write targets are supported:
+ - local: writes Delta tables to a local folder. Requires only SQL Server
+   connectivity, no Fabric connectivity at all. This is the target to use
+   on the on-prem side of an air-gapped environment (see "upload" below for
+   the second half of that workflow).
  - onelake: writes Delta tables directly to a Fabric Lakehouse's "Tables/"
    area via OneLake's ADLS Gen2-compatible endpoint
    (abfss://onelake.dfs.fabric.microsoft.com/<workspace>/<lakehouse>.Lakehouse/Tables/<table>),
    authenticated via a service principal (ClientSecretCredential). This
    requires no Spark/gateway - the deltalake (delta-rs) library writes the
-   Delta transaction log directly.
+   Delta transaction log directly. Requires BOTH SQL Server connectivity AND
+   Fabric/OneLake connectivity from the same machine/process.
+ - upload: reads Delta tables that were already extracted to a local folder
+   (via the "local" target above, typically on a separate on-prem machine
+   with no Fabric connectivity) and uploads them to OneLake. Requires ONLY
+   Fabric/OneLake connectivity - no SQL Server connectivity or AMO/pythonnet
+   at all. This is the bridge step for enterprises where the on-prem network
+   and the Fabric-connected network are not directly reachable from each
+   other: run "local" on-prem, transfer the resulting folder out-of-band
+   (e.g. secure file copy, removable media, existing file-transfer gateway),
+   then run "upload" from a machine that has Fabric/internet access.
 
 This module deliberately does NOT depend on the AMO/pythonnet extractor - it
 only needs the JSON IR (for column type + table name info) and a SQL Server
-connection string.
+connection string (for the "local"/"onelake" targets; not needed for
+"upload").
 """
 from __future__ import annotations
 
@@ -89,6 +102,37 @@ def write_delta_onelake(df, workspace_id, lakehouse_id, table_name, credential, 
     return table_path
 
 
+def upload_local_delta_to_onelake(local_table_dir, workspace_id, lakehouse_id, table_name, credential, mode="overwrite"):
+    """
+    Reads a single Delta table that was already materialized on local disk
+    (e.g. by write_delta_local on an on-prem, non-Fabric-connected machine)
+    and uploads it to OneLake. No SQL Server connection is used here - this
+    is the second half of the air-gapped bridge, and only needs Fabric/
+    OneLake network access plus the local Delta folder produced by Phase 1.
+    """
+    from deltalake import DeltaTable
+
+    dt = DeltaTable(local_table_dir)
+    df = dt.to_pandas()
+    return write_delta_onelake(df, workspace_id, lakehouse_id, table_name, credential, mode), len(df)
+
+
+def upload_all_local_tables(local_root, workspace_id, lakehouse_id, credential, mode="overwrite"):
+    """
+    Uploads every Delta table subfolder found directly under local_root
+    (as produced by migrate_all_tables(..., target="local")) to OneLake.
+    Returns dict of table_name -> {"rows": n, "path": ...}.
+    """
+    results = {}
+    for entry in sorted(os.listdir(local_root)):
+        table_dir = os.path.join(local_root, entry)
+        if not os.path.isdir(table_dir):
+            continue
+        path, rows = upload_local_delta_to_onelake(table_dir, workspace_id, lakehouse_id, entry, credential, mode)
+        results[entry] = {"rows": rows, "path": path}
+    return results
+
+
 def migrate_all_tables(ir, sql_server, sql_database, target, **target_kwargs):
     """
     target: "local" or "onelake"
@@ -120,21 +164,36 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Extract star-schema tables and write them as Delta tables")
-    parser.add_argument("--metadata", default="output/cube_metadata.json")
-    parser.add_argument("--sql-server", required=True)
-    parser.add_argument("--sql-database", required=True)
-    parser.add_argument("--target", choices=["local", "onelake"], default="local")
-    parser.add_argument("--output-dir", default="output/delta")
+    parser.add_argument("--metadata", default="output/cube_metadata.json", help="Not required for --target upload")
+    parser.add_argument("--sql-server", default=None, help="Required for --target local/onelake")
+    parser.add_argument("--sql-database", default=None, help="Required for --target local/onelake")
+    parser.add_argument(
+        "--target", choices=["local", "onelake", "upload"], default="local",
+        help=(
+            "local: on-prem only, no Fabric connectivity needed. "
+            "onelake: needs BOTH SQL Server and Fabric connectivity from this machine. "
+            "upload: needs ONLY Fabric connectivity; reads Delta tables already produced by "
+            "--target local (via --local-dir) and pushes them to OneLake - use this on the "
+            "Fabric-connected side of an air-gapped environment."
+        ),
+    )
+    parser.add_argument("--output-dir", default="output/delta", help="Used by --target local")
+    parser.add_argument("--local-dir", default=None, help="Required for --target upload: folder produced by --target local")
     parser.add_argument("--workspace-id", default=None)
     parser.add_argument("--lakehouse-id", default=None)
     args = parser.parse_args()
 
-    with open(args.metadata, "r", encoding="utf-8") as f:
-        ir = json.load(f)
-
     if args.target == "local":
+        if not args.sql_server or not args.sql_database:
+            parser.error("--sql-server and --sql-database are required for --target local")
+        with open(args.metadata, "r", encoding="utf-8") as f:
+            ir = json.load(f)
         res = migrate_all_tables(ir, args.sql_server, args.sql_database, "local", output_dir=args.output_dir)
-    else:
+    elif args.target == "onelake":
+        if not args.sql_server or not args.sql_database:
+            parser.error("--sql-server and --sql-database are required for --target onelake")
+        with open(args.metadata, "r", encoding="utf-8") as f:
+            ir = json.load(f)
         from azure.identity import ClientSecretCredential
 
         cred = ClientSecretCredential(
@@ -145,6 +204,19 @@ if __name__ == "__main__":
         res = migrate_all_tables(
             ir, args.sql_server, args.sql_database, "onelake",
             workspace_id=args.workspace_id, lakehouse_id=args.lakehouse_id, credential=cred,
+        )
+    else:  # upload
+        if not args.local_dir:
+            parser.error("--local-dir is required for --target upload")
+        from azure.identity import ClientSecretCredential
+
+        cred = ClientSecretCredential(
+            tenant_id=os.environ["FABRIC_TENANT_ID"],
+            client_id=os.environ["FABRIC_CLIENT_ID"],
+            client_secret=os.environ["FABRIC_CLIENT_SECRET"],
+        )
+        res = upload_all_local_tables(
+            args.local_dir, args.workspace_id, args.lakehouse_id, cred,
         )
 
     for table_name, info in res.items():
