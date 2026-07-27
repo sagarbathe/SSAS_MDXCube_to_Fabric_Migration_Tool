@@ -643,14 +643,14 @@ ssas_fabric_migrator/
                                             Phase 2, Step 6 (--target onelake / --target upload)
   deploy/fabric_client.py                  Phase 2, Steps 5/7 - Fabric REST API client
   cli/orchestrator.py                      Chains all steps via one command, phase-aware
+  sample-output/                           Reference MIGRATION_REPORT.md/feasibility_report.json/
+                                            MANUAL_TRANSLATION_REQUIRED.md produced by a real run
+                                            against AutoInsuranceCubeDemo (see Section 10)
 config/.env.template                       Copy to .env and fill in (git-ignored)
 demo-cube-setup/                           Reference: SQL + AMO scripts used to build
                                             the sample on-prem cubes this tool was
                                             validated against (not required to use
                                             the tool itself)
-demo-cube-setup/sample-output/             Reference MIGRATION_REPORT.md/feasibility_report.json/
-                                            MANUAL_TRANSLATION_REQUIRED.md produced by a real run
-                                            against AutoInsuranceCubeDemo (see Section 10)
 requirements.txt
 ```
 
@@ -715,7 +715,7 @@ requirements.txt
   rollup), two calculated members (Loss Ratio, Claim Severity), and a KPI
   (Loss Ratio KPI) specifically to exercise the "flagged for manual
   review" reporting path end-to-end - see
-  `demo-cube-setup/sample-output/AutoInsuranceCubeDemo/MIGRATION_REPORT.md`
+  `ssas_fabric_migrator/sample-output/AutoInsuranceCubeDemo/MIGRATION_REPORT.md`
   for the real report this produced (parent-child correctly forces
   `Import` mode; calculated members/KPI are listed for hand-authoring in
   DAX). Larger/more complex production cubes (multiple measure groups,
