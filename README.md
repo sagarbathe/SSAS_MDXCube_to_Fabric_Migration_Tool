@@ -32,7 +32,7 @@ automates that process end-to-end:
    - A **Migration Conversion Report** (`MIGRATION_REPORT.md`) - a single
      document stating exactly what was converted automatically and what
      was not, with a suggested manual alternative for every item that
-     wasn't (see [Section 7](#7-the-migration-conversion-report)).
+     wasn't (see [Section 8](#8-the-migration-conversion-report)).
 4. **Migrates data**: extracts the underlying star-schema tables from the
    on-premises relational source and writes them as Delta tables into a
    Fabric Lakehouse via OneLake (no Spark cluster, gateway, or mirroring
@@ -167,7 +167,7 @@ flowchart TD
 
 | # | Prerequisite | Why | How to verify |
 |---|---|---|---|
-| 1 | **x64 Python 3.10+** (not ARM64 - see [Limitations](#8-limitations)) | `pyarrow` and `deltalake` (used by the optional local Delta export) do not ship ARM64 Windows wheels at the time of writing | `python -c "import platform; print(platform.machine())"` prints `AMD64` |
+| 1 | **x64 Python 3.10+** (not ARM64 - see [Limitations](#10-limitations)) | `pyarrow` and `deltalake` (used by the optional local Delta export) do not ship ARM64 Windows wheels at the time of writing | `python -c "import platform; print(platform.machine())"` prints `AMD64` |
 | 2 | SQL Server **AMO** client library installed (installed automatically with SSMS or the SQL Server Feature Pack) | `extractor/amo_client.py` loads `Microsoft.AnalysisServices.dll` via `pythonnet` | `Get-ChildItem "C:\Program Files\Microsoft SQL Server" -Recurse -Filter "Microsoft.AnalysisServices.dll"` returns a path |
 | 3 | Windows account used to run the extractor is a recognized **Analysis Services Server Administrator** (or the extractor is run from an elevated/admin session) | AS only lists/serves databases to identities it recognizes as admins | Connecting via SSMS (same account, same elevation) shows the target database under the AS server |
 | 4 | ODBC Driver 17 or 18 for SQL Server installed | Needed only if you also run the optional local Delta export (`loader.py --target local`) | `python -c "import pyodbc; print(pyodbc.drivers())"` lists `ODBC Driver 18 for SQL Server` |
@@ -235,7 +235,7 @@ hierarchies, measure groups, measures, calculated members, KPIs, and the
 DSV schema - but **not** Roles/RLS, Actions, Perspectives, Translations,
 custom rollup formulas/unary operators, or MDX `SCOPE` assignments. These
 are called out explicitly (with manual alternatives) in the
-[Migration Conversion Report](#7-the-migration-conversion-report) produced
+[Migration Conversion Report](#8-the-migration-conversion-report) produced
 by Step 4.
 
 ---
@@ -297,7 +297,7 @@ python -m ssas_fabric_migrator.datamover.notebook_script_generator `
   Spark-based load path; only needed if you plan to feed the Lakehouse via
   gateway/mirroring + notebook instead of the Delta-write path in Phase 2).
 
-**Limitations of this step:** see [Section 8](#8-limitations) - one
+**Limitations of this step:** see [Section 10](#10-limitations) - one
 measure group per cube is assumed; parent-child hierarchies and semi-
 additive measures are flagged in the TMDL comments but not auto-authored.
 
@@ -319,7 +319,7 @@ python -m ssas_fabric_migrator.report.conversion_report `
 **Validate success:** open `output\MIGRATION_REPORT.md` and confirm it has
 five sections (Summary, Converted Automatically, Flagged for Manual Review,
 Not Captured At All, Next Steps Checklist) with non-empty tables matching
-your cube's actual structure. See [Section 7](#7-the-migration-conversion-report)
+your cube's actual structure. See [Section 8](#8-the-migration-conversion-report)
 for what to do with it.
 
 **This is the step that answers this document's core requirement: exactly
@@ -522,7 +522,54 @@ python -m ssas_fabric_migrator.cli.orchestrator `
 
 ---
 
-## 7. The Migration Conversion Report
+## 7. Alternative Data-Migration Options (For Review)
+
+Step 6 above (`migrate-data` / `upload-data`) is **one** way to get the
+star-schema data into Lakehouse Delta tables - a direct, code-based
+pyodbc + `deltalake` write with no Spark cluster, gateway, or mirroring
+service involved. It is simple and dependency-light, but it is a
+**one-shot batch snapshot**: every run re-extracts and rewrites the full
+table, there is no change-data-capture (CDC), and a single Python
+process holds the data in memory, which will not scale indefinitely to
+very large fact tables.
+
+For production/enterprise scenarios, Microsoft Fabric offers several more
+robust, natively-supported ingestion mechanisms. **This tool only
+implements the approach in Step 6** (labeled Option 7 below) in code;
+the other options are documented here for evaluation and are not wired
+into the orchestrator. Pick the option(s) that best fit your
+connectivity, freshness, and scale requirements, then let us know if
+you'd like any of them added as a new orchestrator step/target.
+
+| # | Option | How it works | Latency/freshness | Prerequisites | Best fit | Key limitation |
+|---|---|---|---|---|---|---|
+| **1** | **Fabric Mirroring for SQL Server (CDC-based)** - native | Enables SQL Server CDC on source tables; Fabric continuously pulls change tables via an On-premises Data Gateway into OneLake as Delta tables. Zero-ETL, fully managed | Near real-time (seconds-minutes) | SQL Server 2016-2022, SQL Server Agent running, CDC enabled, On-premises Data Gateway installed & registered to the workspace, sysadmin/`db_owner` for setup | Continuously changing source; want a live Direct Lake model with no pipeline code to maintain | Needs a gateway - i.e., live network connectivity to Fabric is required, which does not fit a fully air-gapped scenario; schema changes need manual re-sync |
+| **2** | **Fabric Mirroring for SQL Server 2025 (Change Feed)** - native, newer | Reads the transaction log directly (no CDC change tables/SQL Agent jobs); requires SQL Server 2025 + Azure Arc-enabled SQL Server instance for managed-identity auth to Fabric | Near real-time, lower overhead than Option 1 | SQL Server **2025 only**, on-premises only (not Azure VM/Linux as of this writing), Azure Arc enrollment, On-premises Data Gateway | Same use case as Option 1, if you are already on/upgrading to SQL Server 2025 | Version-locked to SQL Server 2025; still needs live connectivity + Arc enrollment |
+| **3** | **Fabric Open Mirroring** - native, generic landing-zone API | Any script/application writes Parquet or CSV files plus a `_metadata.json` (declaring key columns) to a Fabric-provided OneLake landing-zone URL; Fabric auto-converts the files to Delta tables and applies upserts/deletes | Depends on how often you push - can be near-real-time or batch | No CDC/Arc/gateway *requirement* from Fabric's side, but you must build the extraction/incremental logic yourself (e.g., watermark-based pull from SQL Server) and push files to the landing zone | Legacy/older SQL Server versions not supported by Options 1-2; or when you want Fabric-native "mirroring" semantics (auto Delta conversion, incremental upsert) while still fitting the air-gapped/two-phase design already used by this tool | You own the CDC/incremental-extraction code and scheduling; no fully managed connector |
+| **4** | **Fabric Data Factory - Copy Data activity/pipelines** | Low-code pipeline; Copy activity reads SQL Server (via On-premises Data Gateway) and writes Lakehouse Delta tables or a Warehouse; supports incremental copy via a watermark column | Batch/scheduled (minutes to hours) | On-premises Data Gateway, source connection, optional watermark column for incremental loads | Teams wanting a visual, low-code, schedulable pipeline instead of custom Python | Not real-time; gateway still required |
+| **5** | **Fabric Dataflows Gen2** | Power Query-based, low-code ingestion into a Lakehouse; similar to Option 4 but more accessible to business analysts | Batch/scheduled | On-premises Data Gateway | Smaller tables, business-user-maintained transforms | Least scalable of these options for large fact tables; still batch |
+| **6** | **Fabric Notebook (PySpark/JDBC)** | A Spark notebook reads SQL Server via JDBC and writes Delta tables; full custom control over incremental logic. This tool already generates a starting-point PySpark script for this path (Phase 1, Step 3, `notebooks/*.py`) | Batch, whatever you schedule | On-premises Data Gateway (or a reachable endpoint) + Spark compute (capacity cost) | Complex transforms, very large tables, custom incremental/CDC logic | You write/maintain the Spark code; Spark capacity consumption |
+| **7** | **This tool's implemented approach** - direct pyodbc + `deltalake` write, or local-export + `upload-data` bridge | Extracts via pyodbc, writes Delta tables directly via the `deltalake` Python library (no Spark) - either straight to OneLake (`migrate-data`) or via a local export/upload bridge for air-gapped environments (`upload-data`, see Step 6) | One-shot/on-demand batch | Just Python + ODBC driver (+ Fabric credentials for the direct-write path) | Simple star schemas, demos/PoCs, and air-gapped environments via the local export+upload bridge | No CDC/incremental support - every run is a full snapshot rewrite; single-machine, in-memory processing does not scale to very large fact tables |
+
+**Cutting across all of these:** Options 1, 2, 4, 5, and 6 all require an
+**On-premises Data Gateway** (i.e., live network reachability from
+on-prem to Fabric) and therefore do not improve on the air-gapped
+scenario already handled by Step 6's `upload-data` bridge. **Option 3
+(Open Mirroring)** is the most promising Fabric-native upgrade path that
+still respects the air-gapped/no-gateway constraint, since you control
+exactly how and when data is pushed to the landing zone - but it would
+require building custom incremental-extraction logic that this tool does
+not currently implement.
+
+*(A further option - migrating the on-prem SQL Server to Azure SQL
+Database/Managed Instance first, then using Fabric's native Mirroring
+for Azure SQL - was considered but is out of scope here, since it
+assumes the relational source itself is being modernized off SQL Server,
+which is a separate project decision from this cube-migration tool.)*
+
+---
+
+## 8. The Migration Conversion Report
 
 `output\MIGRATION_REPORT.md` (generated in Phase 1, Step 4) is the
 authoritative answer to "what did this tool actually do to my cube?" It has
@@ -557,7 +604,7 @@ the generated model changes, and re-review sections 3 and 4 before sign-off.
 
 ---
 
-## 8. Repository Structure
+## 9. Repository Structure
 
 ```
 ssas_fabric_migrator/
@@ -580,7 +627,7 @@ requirements.txt
 
 ---
 
-## 9. Limitations
+## 10. Limitations
 
 - **Windows ARM64 is not supported for running the tool itself.** `pyarrow`,
   `cryptography`, and `deltalake` have no prebuilt wheels for Windows ARM64
@@ -609,7 +656,7 @@ requirements.txt
   custom rollup formulas/unary operators, write-back, and MDX `SCOPE`
   assignments are not extracted at all** - the extractor has no code path
   for them, so they are silently absent unless you check for them manually
-  (see [Section 4 of the Migration Conversion Report](#7-the-migration-conversion-report)).
+  (see [Section 4 of the Migration Conversion Report](#8-the-migration-conversion-report)).
 - **`migrate-data` requires simultaneous on-prem + Fabric connectivity from
   one machine.** For environments where that is not possible, use the
   local export (`loader.py --target local`) + `upload-data` bridge instead
@@ -618,7 +665,10 @@ requirements.txt
   this single-machine, in-memory (`pandas`/`pyarrow`) approach will not
   scale as well as a gateway-fed Fabric pipeline or Spark-based load - use
   the generated notebook scripts (Step 3) as a starting point for that path
-  instead if data volumes are large.
+  instead if data volumes are large. See [Section 7](#7-alternative-data-migration-options-for-review)
+  for a fuller comparison of Fabric-native alternatives (Mirroring, Open
+  Mirroring, Data Factory, Dataflows Gen2, Spark notebooks) - none of which
+  are currently implemented in this tool's code.
 - **One semantic model per cube, one measure group per cube assumed** in
   the current TMDL generator. Cubes with multiple measure groups (multiple
   fact tables) will need the generator extended to emit multiple fact
