@@ -1,0 +1,15 @@
+# Byte-compiled / cache
+__pycache__/
+*.pyc
+
+# Secrets - never commit real credentials
+config/.env
+
+# Generated pipeline output (cube metadata dumps, TMDL, notebooks, Delta
+# staging files) - these are run-specific artifacts, not source
+output/
+
+# OS/editor noise
+.vscode/
+.DS_Store
+Thumbs.db

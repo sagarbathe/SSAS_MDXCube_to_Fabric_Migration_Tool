@@ -1,0 +1,151 @@
+"""
+Data mover: extracts rows from the on-prem relational source (the star
+schema tables underlying the SSAS cube) and writes them as Delta tables.
+
+Two write targets are supported:
+ - local: writes Delta tables to a local folder (useful for dry-run /
+   validation without a Fabric workspace connection).
+ - onelake: writes Delta tables directly to a Fabric Lakehouse's "Tables/"
+   area via OneLake's ADLS Gen2-compatible endpoint
+   (abfss://onelake.dfs.fabric.microsoft.com/<workspace>/<lakehouse>.Lakehouse/Tables/<table>),
+   authenticated via a service principal (ClientSecretCredential). This
+   requires no Spark/gateway - the deltalake (delta-rs) library writes the
+   Delta transaction log directly.
+
+This module deliberately does NOT depend on the AMO/pythonnet extractor - it
+only needs the JSON IR (for column type + table name info) and a SQL Server
+connection string.
+"""
+from __future__ import annotations
+
+import json
+import os
+
+import pandas as pd
+import pyodbc
+
+AMO_TO_PANDAS_TYPE = {
+    "System.Int32": "Int64",
+    "System.Int16": "Int64",
+    "System.Int64": "Int64",
+    "System.Double": "float64",
+    "System.Single": "float64",
+    "System.Decimal": "float64",
+    "System.String": "string",
+    "System.DateTime": "datetime64[ns]",
+    "System.Boolean": "boolean",
+}
+
+
+def _sql_connection_string(server, database, driver="ODBC Driver 18 for SQL Server"):
+    return (
+        "DRIVER={" + driver + "};SERVER=" + server + ";DATABASE=" + database
+        + ";Trusted_Connection=yes;TrustServerCertificate=yes;"
+    )
+
+
+def list_source_tables(ir):
+    """Returns the set of physical table names referenced by the cube's DSV."""
+    tables = []
+    for dsv in ir.get("data_source_views", []):
+        for t in dsv.get("tables", []):
+            tables.append(t["name"])
+    return tables
+
+
+def extract_table_df(sql_server, sql_database, table_name):
+    conn_str = _sql_connection_string(sql_server, sql_database)
+    conn = pyodbc.connect(conn_str)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT * FROM [{table_name}]")
+        columns = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        df = pd.DataFrame.from_records(list(map(tuple, rows)), columns=columns)
+        return df
+    finally:
+        conn.close()
+
+
+def write_delta_local(df, output_dir, table_name, mode="overwrite"):
+    from deltalake import write_deltalake
+
+    table_path = os.path.join(output_dir, table_name)
+    os.makedirs(table_path, exist_ok=True)
+    write_deltalake(table_path, df, mode=mode)
+    return table_path
+
+
+def write_delta_onelake(df, workspace_id, lakehouse_id, table_name, credential, mode="overwrite"):
+    from deltalake import write_deltalake
+
+    table_path = (
+        f"abfss://{workspace_id}@onelake.dfs.fabric.microsoft.com/"
+        f"{lakehouse_id}/Tables/{table_name}"
+    )
+    token = credential.get_token("https://storage.azure.com/.default").token
+    storage_options = {"bearer_token": token, "use_fabric_endpoint": "true"}
+    write_deltalake(table_path, df, mode=mode, storage_options=storage_options)
+    return table_path
+
+
+def migrate_all_tables(ir, sql_server, sql_database, target, **target_kwargs):
+    """
+    target: "local" or "onelake"
+    target_kwargs:
+      local  -> output_dir=<path>
+      onelake -> workspace_id=..., lakehouse_id=..., credential=<TokenCredential>
+    Returns dict of table_name -> {"rows": n, "path": ...}
+    """
+    results = {}
+    for table_name in list_source_tables(ir):
+        df = extract_table_df(sql_server, sql_database, table_name)
+        if target == "local":
+            path = write_delta_local(df, target_kwargs["output_dir"], table_name)
+        elif target == "onelake":
+            path = write_delta_onelake(
+                df,
+                target_kwargs["workspace_id"],
+                target_kwargs["lakehouse_id"],
+                table_name,
+                target_kwargs["credential"],
+            )
+        else:
+            raise ValueError(f"Unknown target '{target}'")
+        results[table_name] = {"rows": len(df), "path": path}
+    return results
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Extract star-schema tables and write them as Delta tables")
+    parser.add_argument("--metadata", default="output/cube_metadata.json")
+    parser.add_argument("--sql-server", required=True)
+    parser.add_argument("--sql-database", required=True)
+    parser.add_argument("--target", choices=["local", "onelake"], default="local")
+    parser.add_argument("--output-dir", default="output/delta")
+    parser.add_argument("--workspace-id", default=None)
+    parser.add_argument("--lakehouse-id", default=None)
+    args = parser.parse_args()
+
+    with open(args.metadata, "r", encoding="utf-8") as f:
+        ir = json.load(f)
+
+    if args.target == "local":
+        res = migrate_all_tables(ir, args.sql_server, args.sql_database, "local", output_dir=args.output_dir)
+    else:
+        from azure.identity import ClientSecretCredential
+
+        cred = ClientSecretCredential(
+            tenant_id=os.environ["FABRIC_TENANT_ID"],
+            client_id=os.environ["FABRIC_CLIENT_ID"],
+            client_secret=os.environ["FABRIC_CLIENT_SECRET"],
+        )
+        res = migrate_all_tables(
+            ir, args.sql_server, args.sql_database, "onelake",
+            workspace_id=args.workspace_id, lakehouse_id=args.lakehouse_id, credential=cred,
+        )
+
+    for table_name, info in res.items():
+        print(f"{table_name}: {info['rows']} rows -> {info['path']}")

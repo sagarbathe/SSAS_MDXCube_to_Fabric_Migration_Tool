@@ -1,0 +1,12 @@
+pythonnet==3.1.0
+pyodbc==5.3.0
+azure-identity==1.25.3
+requests==2.34.2
+pyarrow==25.0.0
+pandas==3.0.5
+deltalake==1.6.2
+
+# NOTE: On Windows ARM64 machines, prebuilt wheels for pyarrow/cryptography/deltalake
+# are not available. Run this tool with an x64 Python interpreter instead
+# (e.g. C:\Users\sagarbathe\Python312-x64\python.exe), which runs fine under
+# Windows-on-ARM emulation and has full wheel support.
