@@ -506,6 +506,32 @@ python -m ssas_fabric_migrator.cli.orchestrator --steps "deploy-model" `
   manual refresh needed). If it was recommended for **Import**, a
   scheduled/manual refresh is required to pick up new data - configure this
   separately in the Fabric portal.
+- **Import-mode models need a one-time manual credential binding before
+  the first refresh will succeed.** The generated M partition always
+  points at the Fabric Lakehouse's own SQL analytics endpoint (see
+  `expressions.tmdl`'s `DatabaseQuery`, e.g.
+  `Sql.Database("<workspace>-<lakehouse>.datawarehouse.fabric.microsoft.com", "<LakehouseName>")`)
+  - never the on-prem SQL Server - but because the item is created via the
+    REST API, Fabric provisions that connection with no stored credentials.
+    Refreshing before binding credentials fails with:
+    `Premium_ASWL_Error` / "this semantic model uses a default data
+    connection without explicit connection credentials". Fix once per
+    model:
+  1. Open the workspace &rarr; the semantic model &rarr; **Settings** (gear
+     icon or `...` &rarr; Settings).
+  2. Expand **Gateway and cloud connections**.
+  3. Find the connection for the Lakehouse's `...datawarehouse.fabric.
+     microsoft.com` endpoint (it shows as an unbound/default connection).
+  4. **Edit connection** &rarr; **Cloud connection** (no gateway needed,
+     it's a Fabric-internal endpoint) &rarr; Authentication method
+     **OAuth2 / Organizational account** &rarr; **Save**.
+  5. If no editable connection is offered, create one first under
+     **Workspace settings &rarr; Manage connections and gateways &rarr;
+     New &rarr; Cloud** (same server/database, OAuth2), then map the
+     semantic model to it.
+  6. Click **Refresh now** to confirm.
+  This step is not currently automatable via the public Fabric REST API
+  and must be done once per Import-mode model in the portal.
 
 ### Running everything from one machine (when possible)
 
@@ -707,6 +733,15 @@ requirements.txt
   to deleting and recreating the Semantic Model item - this means the
   item's GUID changes and any downstream reports bound to the old item ID
   must be re-pointed.
+- **Import-mode models require a one-time manual credential binding in the
+  Fabric portal before the first refresh succeeds** (`Premium_ASWL_Error`:
+  "uses a default data connection without explicit connection
+  credentials"). The generated M query already points at the Fabric
+  Lakehouse's own SQL analytics endpoint, not the on-prem SQL Server - the
+  error is only about the connection having no stored credentials, since
+  the item was created via the REST API. See the credential-binding steps
+  under [Step 7](#step-7-deploy-the-semantic-model). Not automatable via
+  the public Fabric REST API today.
 - **Any human-readable placeholder/notes file must live outside the TMDL
   `definition/` folder.** Fabric's Dataset workload parses every file
   under `definition/` as strict TMDL syntax; a `.tmdl`-extension file
