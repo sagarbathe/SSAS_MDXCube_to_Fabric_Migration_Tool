@@ -85,7 +85,8 @@ def write_delta_local(df, output_dir, table_name, mode="overwrite"):
 
     table_path = os.path.join(output_dir, table_name)
     os.makedirs(table_path, exist_ok=True)
-    write_deltalake(table_path, df, mode=mode)
+    kwargs = {"schema_mode": "overwrite"} if mode == "overwrite" else {}
+    write_deltalake(table_path, df, mode=mode, **kwargs)
     return table_path
 
 
@@ -98,7 +99,11 @@ def write_delta_onelake(df, workspace_id, lakehouse_id, table_name, credential, 
     )
     token = credential.get_token("https://storage.azure.com/.default").token
     storage_options = {"bearer_token": token, "use_fabric_endpoint": "true"}
-    write_deltalake(table_path, df, mode=mode, storage_options=storage_options)
+    # schema_mode="overwrite" allows the table's column set to change between
+    # runs (e.g. a source column is added/removed) instead of raising
+    # SchemaMismatchError against the previously-written Delta schema.
+    kwargs = {"schema_mode": "overwrite"} if mode == "overwrite" else {}
+    write_deltalake(table_path, df, mode=mode, storage_options=storage_options, **kwargs)
     return table_path
 
 

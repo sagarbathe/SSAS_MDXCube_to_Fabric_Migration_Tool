@@ -38,7 +38,8 @@ New-Table "Dim_Date" @(
     @{Name="DateKey"; Type=[int]}, @{Name="FullDate"; Type=[datetime]},
     @{Name="Year"; Type=[int]}, @{Name="Quarter"; Type=[int]}, @{Name="Month"; Type=[int]},
     @{Name="MonthName"; Type=[string]}, @{Name="Day"; Type=[int]},
-    @{Name="DayOfWeek"; Type=[int]}, @{Name="WeekdayName"; Type=[string]}
+    @{Name="DayOfWeek"; Type=[int]}, @{Name="WeekdayName"; Type=[string]},
+    @{Name="ParentDateKey"; Type=[int]}
 ) | Out-Null
 
 New-Table "Dim_Geography" @(
@@ -118,6 +119,19 @@ $hierDate.Levels.Add("Year","Year").SourceAttributeID = "Year"
 $hierDate.Levels.Add("Quarter","Quarter").SourceAttributeID = "Quarter"
 $hierDate.Levels.Add("Month Name","Month Name").SourceAttributeID = "Month Name"
 $hierDate.Levels.Add("Day Of Month","Day Of Month").SourceAttributeID = "Day Of Month"
+
+# ---- Parent-child hierarchy (Day -> Month-End -> Quarter-End -> Year-End -> root) ----
+# This is a genuine MDX/AMO parent-child attribute: its own members ARE the
+# dimension's date members, linked via the self-referencing ParentDateKey
+# column. Direct Lake / DAX has no PATH()-based calculated-column equivalent,
+# so this is deliberately included to exercise the migration tool's
+# parent-child detection and Migration Conversion Report guidance.
+$pcAttr = $dimDate.Attributes.Add("Date Rollup", "Date Rollup")
+$pcAttr.Usage = [Microsoft.AnalysisServices.AttributeUsage]::Parent
+$pcAttr.KeyColumns.Add((New-Object Microsoft.AnalysisServices.ColumnBinding("Dim_Date","ParentDateKey"))) | Out-Null
+$pcAttr.NameColumn = New-Object Microsoft.AnalysisServices.ColumnBinding("Dim_Date","FullDate")
+$pcAttr.RootMemberIf = [Microsoft.AnalysisServices.RootIfValue]::ParentIsBlankSelfOrMissing
+Write-Host "Dim Date parent-child attribute (Date Rollup) added in memory."
 Write-Host "Dim Date added in memory."
 
 # Dim Geography (with coordinates)
@@ -205,6 +219,31 @@ Add-MgDimension $mg "Dim Policy" "Dim Policy" "PolicyKey"
 
 $partition = $mg.Partitions.Add("Fact Claims","Fact Claims")
 $partition.Source = New-Object Microsoft.AnalysisServices.DsvTableBinding($dsv.ID, "Fact_Claims")
+
+# ---------------- Calculated members (MDX, not auto-translatable to DAX) ----------------
+if ($cube.MdxScripts.Count -eq 0) { $mdxScript = $cube.MdxScripts.Add("MdxScript") } else { $mdxScript = $cube.MdxScripts[0] }
+
+$cmdLossRatio = New-Object Microsoft.AnalysisServices.Command
+$cmdLossRatio.Text = "CREATE MEMBER CURRENTCUBE.[Measures].[Loss Ratio] AS IIF([Measures].[Incurred Amount] = 0, NULL, [Measures].[Paid Amount] / [Measures].[Incurred Amount]), FORMAT_STRING = '0.00%', VISIBLE = 1;"
+$mdxScript.Commands.Add($cmdLossRatio) | Out-Null
+
+$cmdSeverity = New-Object Microsoft.AnalysisServices.Command
+$cmdSeverity.Text = "CREATE MEMBER CURRENTCUBE.[Measures].[Claim Severity] AS IIF([Measures].[Claim Count] = 0, NULL, [Measures].[Incurred Amount] / [Measures].[Claim Count]), FORMAT_STRING = 'Currency', VISIBLE = 1;"
+$mdxScript.Commands.Add($cmdSeverity) | Out-Null
+Write-Host "Calculated members (Loss Ratio, Claim Severity) added in memory."
+
+# ---------------- KPI (Goal/Status/Trend MDX expressions - no direct DAX KPI equivalent) ----------------
+$kpi = New-Object Microsoft.AnalysisServices.Kpi
+$kpi.Name = "Loss Ratio KPI"
+$kpi.AssociatedMeasureGroupID = $mg.ID
+$kpi.Value = "[Measures].[Loss Ratio]"
+$kpi.Goal = "0.65"
+$kpi.Status = "CASE WHEN [Measures].[Loss Ratio] <= 0.65 THEN 1 WHEN [Measures].[Loss Ratio] <= 0.80 THEN 0 ELSE -1 END"
+$kpi.Trend = "0"
+$kpi.StatusGraphic = "Traffic Light"
+$kpi.TrendGraphic = "Standard Arrow"
+$cube.Kpis.Add($kpi) | Out-Null
+Write-Host "KPI (Loss Ratio KPI) added in memory."
 
 Write-Host "Cube built in memory. Pushing entire database tree to server with ExpandFull..."
 

@@ -138,6 +138,15 @@ _ALTERNATIVE_BY_KEYWORD = [
         "via the bridge table in the semantic model.",
     ),
     (
+        "parent_child_attribute",
+        "This is a genuine Usage=Parent attribute (not just a suspected single-level "
+        "hierarchy). Precompute a materialized path (e.g. a delimited ancestor path or a "
+        "fixed set of level columns for the known depth) in the Lakehouse table via a "
+        "notebook/dataflow, and model it either as a fixed-depth hierarchy or with a DAX "
+        "PATH()/PATHITEM() calculated column pattern (Import mode only - Direct Lake does "
+        "not support calculated columns).",
+    ),
+    (
         "single-level hierarchy",
         "If this is confirmed to be a parent-child hierarchy (self-referencing key column), "
         "precompute a materialized path (e.g. a delimited ancestor path or level columns) in "

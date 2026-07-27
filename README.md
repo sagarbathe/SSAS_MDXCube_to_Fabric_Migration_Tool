@@ -622,6 +622,9 @@ demo-cube-setup/                           Reference: SQL + AMO scripts used to 
                                             the sample on-prem cubes this tool was
                                             validated against (not required to use
                                             the tool itself)
+demo-cube-setup/sample-output/             Reference MIGRATION_REPORT.md/feasibility_report.json/
+                                            MANUAL_TRANSLATION_REQUIRED.md produced by a real run
+                                            against AutoInsuranceCubeDemo (see Section 10)
 requirements.txt
 ```
 
@@ -681,8 +684,33 @@ requirements.txt
   star schema (`Sum`/`Count` measures only, no calculated members/KPIs/
   parent-child hierarchies) and a 5-dimension, 1-fact-table auto insurance
   claims star schema (traditional claims measures, a geography dimension
-  with latitude/longitude coordinates, still no calculated members/KPIs/
-  parent-child hierarchies). Larger/more complex production cubes
-  (multiple measure groups, calculated members, KPIs, parent-child
-  hierarchies, RLS) should be run through Phase 1 Steps 2 and 4 carefully,
-  and the generated TMDL reviewed before being treated as production-ready.
+  with latitude/longitude coordinates). The auto insurance cube was later
+  extended with a parent-child hierarchy (`Dim_Date` self-referencing
+  rollup), two calculated members (Loss Ratio, Claim Severity), and a KPI
+  (Loss Ratio KPI) specifically to exercise the "flagged for manual
+  review" reporting path end-to-end - see
+  `demo-cube-setup/sample-output/AutoInsuranceCubeDemo/MIGRATION_REPORT.md`
+  for the real report this produced (parent-child correctly forces
+  `Import` mode; calculated members/KPI are listed for hand-authoring in
+  DAX). Larger/more complex production cubes (multiple measure groups,
+  RLS, Actions, Perspectives) should still be run through Phase 1 Steps 2
+  and 4 carefully, and the generated TMDL reviewed before being treated as
+  production-ready.
+- **Switching an already-deployed Semantic Model between storage modes is
+  not supported in-place by Fabric.** If a cube is redeployed after a
+  schema change that flips the recommended mode (e.g., adding a
+  parent-child attribute forces Direct Lake &rarr; Import), the Fabric
+  Dataset API rejects the `updateDefinition` call with
+  `Dataset_Import_FailedToImportDataset` ("Converting existing tables or
+  partitions from Direct Lake to other storage modes is not supported").
+  `deploy-model` detects this specific error and automatically falls back
+  to deleting and recreating the Semantic Model item - this means the
+  item's GUID changes and any downstream reports bound to the old item ID
+  must be re-pointed.
+- **Any human-readable placeholder/notes file must live outside the TMDL
+  `definition/` folder.** Fabric's Dataset workload parses every file
+  under `definition/` as strict TMDL syntax; a `.tmdl`-extension file
+  containing free-form comments with no top-level TMDL object fails with
+  `TMDL Format Error: Unexpected line type: Other`. `MANUAL_TRANSLATION_REQUIRED.md`
+  is therefore generated as Markdown, as a sibling of `definition/` rather
+  than inside it.

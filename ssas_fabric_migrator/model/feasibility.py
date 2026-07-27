@@ -13,9 +13,14 @@ Known Direct Lake constraints considered (as of Fabric GA, mid-2025):
    upstream in the Lakehouse). MDX calculated members translate to DAX
    calculated measures, which ARE supported, so calculated members alone do
    not block Direct Lake.
- - Parent-child hierarchies require PATH based calculated columns in
-   Tabular, which are NOT supported in Direct Lake unless the path is
-   precomputed in the Lakehouse table itself. Flagged as blocking.
+ - Parent-child hierarchies (an attribute with Usage=Parent, i.e. a
+   self-referencing key column) are detected explicitly from the extracted
+   attribute metadata and always flagged as blocking - they require
+   PATH()-based calculated columns in Tabular, which are NOT supported in
+   Direct Lake unless the path is precomputed in the Lakehouse table
+   itself. As a secondary heuristic, any single-level *named* hierarchy is
+   also flagged as a warning in case it is a parent-child hierarchy that
+   was not modeled as a dedicated Usage=Parent attribute.
  - Semi-additive aggregate functions (AverageOfChildren, ByAccount,
    FirstChild, LastChild, FirstNonEmpty, LastNonEmpty) require a hand
    written CALCULATE/time-intelligence DAX pattern. Not blocking, but
@@ -142,6 +147,20 @@ def analyze(ir):
                     cf.findings.append(Finding("blocking", scope, msg))
 
         for dim in ir.get("dimensions", []):
+            for attr in dim.get("attributes", []):
+                if attr.get("usage") == "Parent":
+                    cf.recommended_mode = "Import"
+                    scope = "parent_child_attribute:" + dim["name"] + "/" + attr["name"]
+                    msg = (
+                        "Attribute '" + attr["name"] + "' has Usage=Parent - this is a genuine "
+                        "parent-child hierarchy (self-referencing key column). Direct Lake/DAX "
+                        "has no PATH()-based calculated-column equivalent; the hierarchy must be "
+                        "precomputed as a materialized path/level structure in the Lakehouse, or "
+                        "the model falls back to Import with a manual DAX PATH() pattern. "
+                        "Falling back to Import for this cube."
+                    )
+                    cf.findings.append(Finding("blocking", scope, msg))
+
             for hier in dim.get("hierarchies", []):
                 if len(hier.get("levels", [])) == 1:
                     scope = "hierarchy:" + dim["name"] + "/" + hier["name"]

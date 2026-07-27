@@ -1,0 +1,30 @@
+{
+  "cubes": [
+    {
+      "cube_name": "Auto Insurance Cube",
+      "recommended_mode": "Import",
+      "findings": [
+        {
+          "severity": "info",
+          "scope": "calculated_member:(see raw MDX script)",
+          "message": "MDX calculated member found; will be translated to a DAX calculated measure (supported in Direct Lake). Manual review of the MDX expression is required to hand-translate to DAX."
+        },
+        {
+          "severity": "info",
+          "scope": "calculated_member:(see raw MDX script)",
+          "message": "MDX calculated member found; will be translated to a DAX calculated measure (supported in Direct Lake). Manual review of the MDX expression is required to hand-translate to DAX."
+        },
+        {
+          "severity": "info",
+          "scope": "kpi:Loss Ratio KPI",
+          "message": "KPI found; needs manual DAX translation for Goal/Status/Trend expressions."
+        },
+        {
+          "severity": "blocking",
+          "scope": "parent_child_attribute:Dim Date/Date Rollup",
+          "message": "Attribute 'Date Rollup' has Usage=Parent - this is a genuine parent-child hierarchy (self-referencing key column). Direct Lake/DAX has no PATH()-based calculated-column equivalent; the hierarchy must be precomputed as a materialized path/level structure in the Lakehouse, or the model falls back to Import with a manual DAX PATH() pattern. Falling back to Import for this cube."
+        }
+      ]
+    }
+  ]
+}

@@ -59,6 +59,7 @@ class AttributeIR:
     name_column: Optional[KeyColumnIR] = None
     is_key_attribute: bool = False
     order_by: Optional[str] = None
+    usage: Optional[str] = None
 
 
 @dataclass
@@ -280,6 +281,7 @@ def extract_database(server_name: str, database_name: str) -> CubeModelIR:
                     name=a.Name,
                     key_columns=_key_columns(a.KeyColumns),
                     is_key_attribute=(key_attr is not None and a.ID == key_attr.ID),
+                    usage=str(getattr(a, "Usage", None)) if getattr(a, "Usage", None) is not None else None,
                 )
                 try:
                     if a.NameColumn is not None and a.NameColumn.Source is not None:

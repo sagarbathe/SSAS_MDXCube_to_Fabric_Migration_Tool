@@ -42,6 +42,22 @@ class FabricClient:
             raise RuntimeError(f"POST {path} failed: {r.status_code} {r.text}")
         return r
 
+    def delete_item(self, workspace_id, item_id):
+        """
+        Deletes a Fabric item outright (e.g. a Semantic Model). Needed
+        because updateDefinition cannot change a table's storage mode
+        in-place (Fabric error Dataset_Import_FailedToImportDataset /
+        "You cannot change the storage mode of partition ... Converting
+        existing tables or partitions from Direct Lake to other storage
+        modes is not supported"). When a re-run's feasibility
+        recommendation flips DirectLake<->Import for a cube that was
+        already deployed, delete the existing item first so
+        create_semantic_model recreates it from scratch.
+        """
+        r = requests.delete(f"{FABRIC_API_BASE}/workspaces/{workspace_id}/items/{item_id}", headers=self._headers())
+        if r.status_code not in (200, 204):
+            raise RuntimeError(f"DELETE /workspaces/{workspace_id}/items/{item_id} failed: {r.status_code} {r.text}")
+
     def find_item(self, workspace_id, display_name, item_type):
         items = self._get(f"/workspaces/{workspace_id}/items")
         for item in items.get("value", []):
@@ -93,9 +109,23 @@ class FabricClient:
         body = {"displayName": name, "definition": {"parts": parts}}
         if existing:
             r = self._post(f"/workspaces/{workspace_id}/items/{existing['id']}/updateDefinition", body)
+            try:
+                return self._await_lro_or_body(r, workspace_id, name, "SemanticModel")
+            except RuntimeError as e:
+                # Fabric cannot change a table's storage mode (DirectLake <->
+                # Import) via updateDefinition on an existing item - see
+                # delete_item's docstring. If that's what failed, delete and
+                # recreate instead of leaving the item in a broken state.
+                if "cannot change the storage mode" in str(e).lower():
+                    print(f"    Existing semantic model has a different storage mode; deleting and recreating '{name}' ...")
+                    self.delete_item(workspace_id, existing["id"])
+                    r = self._post(f"/workspaces/{workspace_id}/semanticModels", body)
+                    return self._await_lro_or_body(r, workspace_id, name, "SemanticModel")
+                raise
         else:
             r = self._post(f"/workspaces/{workspace_id}/semanticModels", body)
-        return self._await_lro_or_body(r, workspace_id, name, "SemanticModel")
+            return self._await_lro_or_body(r, workspace_id, name, "SemanticModel")
+
 
 
 if __name__ == "__main__":

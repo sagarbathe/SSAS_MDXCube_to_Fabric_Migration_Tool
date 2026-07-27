@@ -26,15 +26,22 @@ GO
 ------------------------------------------------------------
 CREATE TABLE dbo.Dim_Date
 (
-    DateKey     INT         NOT NULL PRIMARY KEY,   -- yyyymmdd
-    FullDate    DATE        NOT NULL,
-    [Year]      INT         NOT NULL,
-    [Quarter]   INT         NOT NULL,
-    [Month]     INT         NOT NULL,
-    MonthName   VARCHAR(20) NOT NULL,
-    [Day]       INT         NOT NULL,
-    DayOfWeek   INT         NOT NULL,
-    WeekdayName VARCHAR(20) NOT NULL
+    DateKey        INT         NOT NULL PRIMARY KEY,   -- yyyymmdd
+    FullDate       DATE        NOT NULL,
+    [Year]         INT         NOT NULL,
+    [Quarter]      INT         NOT NULL,
+    [Month]        INT         NOT NULL,
+    MonthName      VARCHAR(20) NOT NULL,
+    [Day]          INT         NOT NULL,
+    DayOfWeek      INT         NOT NULL,
+    WeekdayName    VARCHAR(20) NOT NULL,
+    -- Self-referencing "period rollup" key used to build a genuine SSAS
+    -- parent-child hierarchy on Dim_Date (Day -> Month-End -> Quarter-End
+    -- -> Year-End -> root). This is an MDX/AMO construct with no direct
+    -- Tabular/DAX equivalent (Direct Lake cannot use PATH()-based
+    -- calculated columns), used here deliberately to exercise the
+    -- migration tool's parent-child detection/reporting.
+    ParentDateKey  INT         NULL REFERENCES dbo.Dim_Date(DateKey)
 );
 GO
 
@@ -58,6 +65,39 @@ BEGIN
     );
     SET @d = DATEADD(DAY, 1, @d);
 END
+GO
+
+------------------------------------------------------------
+-- Populate ParentDateKey (Day -> Month-End -> Quarter-End -> Year-End)
+--   * Every ordinary day's parent is the last day of its month.
+--   * A month-end that is NOT a quarter-end points to its quarter-end.
+--   * A quarter-end that is NOT a year-end (Dec 31) points to Dec 31.
+--   * Dec 31 (year-end) is the root of each year's branch (NULL parent).
+------------------------------------------------------------
+;WITH MonthEnd AS (
+    SELECT [Year], [Month], MAX(DateKey) AS MonthEndKey
+    FROM dbo.Dim_Date GROUP BY [Year], [Month]
+),
+QuarterEnd AS (
+    SELECT [Year], [Quarter], MAX(DateKey) AS QuarterEndKey
+    FROM dbo.Dim_Date GROUP BY [Year], [Quarter]
+),
+YearEnd AS (
+    SELECT [Year], MAX(DateKey) AS YearEndKey
+    FROM dbo.Dim_Date GROUP BY [Year]
+)
+UPDATE d
+SET d.ParentDateKey =
+    CASE
+        WHEN d.DateKey = ye.YearEndKey THEN NULL                 -- root of the year
+        WHEN d.DateKey = qe.QuarterEndKey THEN ye.YearEndKey      -- quarter-end -> year-end
+        WHEN d.DateKey = me.MonthEndKey THEN qe.QuarterEndKey     -- month-end -> quarter-end
+        ELSE me.MonthEndKey                                      -- ordinary day -> month-end
+    END
+FROM dbo.Dim_Date d
+JOIN MonthEnd me ON me.[Year] = d.[Year] AND me.[Month] = d.[Month]
+JOIN QuarterEnd qe ON qe.[Year] = d.[Year] AND qe.[Quarter] = d.[Quarter]
+JOIN YearEnd ye ON ye.[Year] = d.[Year];
 GO
 
 ------------------------------------------------------------

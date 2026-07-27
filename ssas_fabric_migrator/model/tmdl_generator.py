@@ -102,7 +102,7 @@ def _write(path, content):
         f.write(content)
 
 
-def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl=""):
+def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl="", mode="DirectLake"):
     lines = []
     lines.append("table " + _quote_name(table_name))
     lines.append("")
@@ -122,13 +122,28 @@ def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl=""):
                 lines.append("\t\tlevel " + _quote_name(lvl["name"]))
                 lines.append("\t\t\tcolumn: " + _quote_name(lvl["source_attribute_name"]))
                 lines.append("")
-    lines.append("\tpartition " + _quote_name(table_name) + " = entity")
-    lines.append("\t\tmode: directLake")
-    lines.append("\t\tsource")
-    lines.append("\t\t\tentityName: " + table_name)
-    lines.append("\t\t\tschemaName: dbo")
-    lines.append("\t\t\texpressionSource: DatabaseQuery")
-    lines.append("")
+    if mode == "Import":
+        # Import mode: an "m" (Power Query) partition pulling from the shared
+        # DatabaseQuery expression (Lakehouse SQL analytics endpoint), instead
+        # of a directLake "entity" partition. Requires a scheduled/manual
+        # refresh to pick up new Lakehouse data.
+        lines.append("\tpartition " + _quote_name(table_name) + " = m")
+        lines.append("\t\tmode: import")
+        lines.append("\t\tsource =")
+        lines.append("\t\t\t\tlet")
+        lines.append('\t\t\t\t\tSource = DatabaseQuery,')
+        lines.append('\t\t\t\t\tdbo_Table = Source{[Schema="dbo",Item="' + table_name + '"]}[Data]')
+        lines.append("\t\t\t\tin")
+        lines.append("\t\t\t\t\tdbo_Table")
+        lines.append("")
+    else:
+        lines.append("\tpartition " + _quote_name(table_name) + " = entity")
+        lines.append("\t\tmode: directLake")
+        lines.append("\t\tsource")
+        lines.append("\t\t\tentityName: " + table_name)
+        lines.append("\t\t\tschemaName: dbo")
+        lines.append("\t\t\texpressionSource: DatabaseQuery")
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -195,7 +210,7 @@ def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=Non
     # --- Fact table ---
     fact_columns = _table_columns_ir(ir, fact_table)
     measures_block = _gen_measures_block(mg["measures"], fact_table, column_names={c["name"] for c in fact_columns})
-    fact_tmdl = _gen_table_tmdl(fact_table, fact_columns, measures_tmdl=measures_block)
+    fact_tmdl = _gen_table_tmdl(fact_table, fact_columns, measures_tmdl=measures_block, mode=mode)
     _write(os.path.join(tables_dir, fact_table + ".tmdl"), fact_tmdl)
 
     # --- Dimension tables ---
@@ -221,24 +236,29 @@ def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=Non
                 resolved_levels.append({"name": lvl["name"], "source_attribute_name": col_name or lvl["name"]})
             resolved_hierarchies.append({"name": hier["name"], "levels": resolved_levels})
 
-        dim_tmdl = _gen_table_tmdl(dim_table, dim_columns, hierarchies=resolved_hierarchies)
+        dim_tmdl = _gen_table_tmdl(dim_table, dim_columns, hierarchies=resolved_hierarchies, mode=mode)
         _write(os.path.join(tables_dir, dim_table + ".tmdl"), dim_tmdl)
 
     # --- Relationships ---
     rel_tmdl = _gen_relationships_tmdl(ir, {})
     _write(os.path.join(output_dir, "definition", "relationships.tmdl"), rel_tmdl)
 
-    # --- Calculated members / KPIs: emitted as commented placeholders ---
+    # --- Calculated members / KPIs: emitted as a plain-text placeholder file ---
+    # IMPORTANT: this must NOT live under output_dir/definition/ - Fabric's
+    # Dataset workload parses every file in that folder as strict TMDL, and
+    # free-form "/* ... */" / "//" comment lines with no top-level TMDL
+    # object fail with "TMDL Format Error: Unexpected line type: Other".
+    # Writing it as a sibling .md file keeps it as a Phase-1 human-readable
+    # artifact without breaking semantic model deployment.
     if cube.get("calculated_members") or cube.get("kpis"):
-        placeholder_lines = ["/* The following MDX constructs require manual DAX translation: */", ""]
+        placeholder_lines = ["# Manual DAX Translation Required", "", "The following MDX constructs were extracted from the source cube and require manual DAX translation before they can be added to the deployed semantic model:", ""]
         for cm in cube.get("calculated_members", []):
-            placeholder_lines.append("// Calculated member: " + cm["name"])
-            placeholder_lines.append("// Original MDX: " + cm["expression"].replace("\n", " "))
-            placeholder_lines.append("")
+            placeholder_lines.append("- Calculated member: " + cm["name"])
+            placeholder_lines.append("  - Original MDX: `" + cm["expression"].replace("\n", " ") + "`")
         for kpi in cube.get("kpis", []):
-            placeholder_lines.append("// KPI: " + kpi["name"])
-            placeholder_lines.append("")
-        _write(os.path.join(output_dir, "definition", "MANUAL_TRANSLATION_REQUIRED.tmdl"), "\n".join(placeholder_lines))
+            placeholder_lines.append("- KPI: " + kpi["name"])
+        placeholder_path = os.path.join(os.path.dirname(os.path.normpath(output_dir)), "MANUAL_TRANSLATION_REQUIRED.md")
+        _write(placeholder_path, "\n".join(placeholder_lines))
 
     # --- Shared expression (Lakehouse connection) ---
     endpoint = lakehouse_sql_endpoint or "TODO_SET_LAKEHOUSE_SQL_ENDPOINT"
