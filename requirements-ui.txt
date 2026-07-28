@@ -1,0 +1,5 @@
+streamlit==1.51.0
+
+# Install with:  pip install -r requirements.txt -r requirements-ui.txt
+# Then launch:   streamlit run ssas_fabric_migrator/ui/app.py
+# Use the same x64 Python interpreter as the CLI (see requirements.txt note).

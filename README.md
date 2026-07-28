@@ -643,6 +643,8 @@ ssas_fabric_migrator/
                                             Phase 2, Step 6 (--target onelake / --target upload)
   deploy/fabric_client.py                  Phase 2, Steps 5/7 - Fabric REST API client
   cli/orchestrator.py                      Chains all steps via one command, phase-aware
+  ui/app.py                                Optional Streamlit web UI (Section 11) - thin
+                                            wrapper around orchestrator.py, no new logic
   sample-output/                           Reference MIGRATION_REPORT.md/feasibility_report.json/
                                             MANUAL_TRANSLATION_REQUIRED.md produced by a real run
                                             against AutoInsuranceCubeDemo (see Section 10)
@@ -652,6 +654,7 @@ demo-cube-setup/                           Reference: SQL + AMO scripts used to 
                                             validated against (not required to use
                                             the tool itself)
 requirements.txt
+requirements-ui.txt                        Additional dependency (streamlit) for the web UI
 ```
 
 ---
@@ -749,3 +752,81 @@ requirements.txt
   `TMDL Format Error: Unexpected line type: Other`. `MANUAL_TRANSLATION_REQUIRED.md`
   is therefore generated as Markdown, as a sibling of `definition/` rather
   than inside it.
+
+## 11. Web UI (optional, no-code alternative to the CLI)
+
+A lightweight [Streamlit](https://streamlit.io) web app is included so
+users can drive the whole pipeline from a browser instead of typing CLI
+commands - it is a thin wrapper around the same modules the CLI uses
+(`orchestrator.py` and friends); it adds no new pipeline logic.
+
+**Install and run:**
+
+```powershell
+pip install -r requirements.txt -r requirements-ui.txt
+streamlit run ssas_fabric_migrator\ui\app.py
+```
+
+Then open the printed `http://localhost:8501` URL in a browser. The app
+has tabs for: Configuration (fills in the same `.env` values as
+`config/.env.template`), Phase 1: On-Prem, Phase 2: Fabric, Air-gapped
+upload (`upload-data`), and Reports (renders `MIGRATION_REPORT.md`,
+`feasibility_report.json`, `MANUAL_TRANSLATION_REQUIRED.md` in-browser).
+Each step button runs the exact same orchestrator subprocess as the CLI
+and streams its console output live.
+
+### Deployment topology: "any device with connectivity"
+
+The pipeline's on-prem steps (`extract`, `migrate-data`) still require
+`pythonnet`/AMO and direct network access to the SSAS instance and SQL
+Server - this is a Windows/.NET client-library constraint, not something a
+web UI can remove. So "any device" access is achieved by **hosting this
+one Streamlit app once, on a single Windows host that has connectivity to
+both the on-prem environment and Fabric**, and letting users elsewhere
+reach it over the network via a plain browser - no client install needed
+on their own machine:
+
+```powershell
+streamlit run ssas_fabric_migrator\ui\app.py --server.address 0.0.0.0 --server.port 8501
+```
+
+Then browse to `http://<that-host>:8501` from any laptop, tablet, or thin
+client on the corporate network/VPN. This mirrors the CLI's existing
+constraint (see [Section 2](#2-two-phase-design-on-prem-vs-fabric-connected))
+- only the single hosting machine needs the x64 Python environment and
+network line-of-sight; end users need nothing but a browser and a route
+to that host.
+
+### Login/access used by the UI
+
+The UI does not introduce any new authentication mechanism - it uses
+exactly what the CLI already uses, entered once via the Configuration tab
+and saved to the chosen `.env` file:
+
+- **On-prem SSAS (AMO)**: Windows Integrated Authentication only (SSAS
+  Multidimensional has no SQL-auth option). The Windows account the
+  Streamlit process runs as must hold the **Server Administrator** (or at
+  least Database Administrator) role on the SSAS instance. For a
+  centrally-hosted app, run it as a dedicated domain **service account**
+  granted that role, rather than relying on an individual's elevated
+  session.
+- **On-prem SQL Server** (`migrate-data`): SQL Authentication (recommended:
+  a dedicated **read-only** login with `db_datareader` on the source
+  database only) or Windows Authentication - whichever `pyodbc`/the
+  existing `loader.py` connection string is configured for.
+- **Fabric REST API/OneLake**: a **service principal** (`FABRIC_TENANT_ID`
+  / `FABRIC_CLIENT_ID` / `FABRIC_CLIENT_SECRET`), the same as the CLI
+  today. It must be added as a **Member or Contributor** of the target
+  workspace, and the tenant must have "Service principals can use Fabric
+  APIs" enabled (Fabric Admin Portal &rarr; Tenant settings &rarr;
+  Developer settings). This keeps all Fabric-side calls under one
+  auditable identity regardless of which user clicks the button in the
+  browser; adding per-user delegated login (MSAL interactive/device-code,
+  so actions are attributed to the individual analyst) is a natural
+  follow-up but is not implemented in this first version.
+
+**Secrets handling:** the "Save to env file" button writes plaintext
+values (including the Fabric client secret) to the `.env` file you
+specify - the same file the CLI reads. `config/.env` is already
+git-ignored; if you point the UI at a different path, make sure it is
+outside source control and readable only by the account running the app.
