@@ -337,7 +337,10 @@ def render_config_tab():
     )
     exists_note = "exists" if os.path.exists(full_env_path) else "does not exist yet - will be created on Save"
     st.info(
-        f"This env file lives on disk at:\n\n`{full_env_path}`\n\n"
+        f"This env file lives on disk **relative to wherever you cloned/downloaded this "
+        f"repository** on this machine (`{REPO_ROOT}` on this particular machine right "
+        f"now) - it will resolve to a different folder automatically on someone else's "
+        f"machine or a different clone location:\n\n`{full_env_path}`\n\n"
         f"({exists_note}) - open it directly in a text editor if you'd rather edit it "
         f"outside this UI. It's git-ignored, so its contents (including secrets) are "
         f"never committed to the repo."
