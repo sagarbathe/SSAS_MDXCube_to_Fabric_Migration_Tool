@@ -830,6 +830,13 @@ entire class of conflict, present and future:
 .venv-ui\Scripts\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py
 ```
 
+`.streamlit/config.toml` (included in the repo) sets `toolbarMode =
+"minimal"`, which hides Streamlit's own built-in top-right **"Deploy"**
+button and Streamlit-Cloud menu options - those are unrelated to this
+tool (they publish to Streamlit Community Cloud) and are suppressed to
+avoid confusion, since this app is meant to be hosted on your own Windows
+machine per the topology described below, not on Streamlit Cloud.
+
 Use the **same explicit x64 Python path** as [Section 4](#4-install-dependencies)
 only to *create* `.venv-ui` - once created, `.venv-ui\Scripts\python.exe`
 is itself the interpreter to use for every `pip`/`streamlit` command

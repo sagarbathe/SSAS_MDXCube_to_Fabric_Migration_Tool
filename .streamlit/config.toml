@@ -1,0 +1,7 @@
+[client]
+# "minimal" hides Streamlit's built-in chrome (the top-right "Deploy" button
+# and the "..." menu's Streamlit Cloud options), which are unrelated to this
+# tool - our app is deployed by hosting it on a Windows machine with
+# connectivity to on-prem SSAS/SQL Server and Fabric (see README Section 11),
+# not via Streamlit Community Cloud.
+toolbarMode = "minimal"
