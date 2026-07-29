@@ -867,10 +867,12 @@ chosen if you ever need to bump it.
 
 Then open the printed `http://localhost:8501` URL in a browser. The app
 has tabs for: **Read Me** (live summary of this file, highlighting what
-the tool does/cannot do), **Configuration** (fills in the same `.env`
-values as `config/.env.template`), **Phase 1: On-Prem**, **Phase 2:
-Fabric**, and **Reports** (renders `MIGRATION_REPORT.md`,
-`feasibility_report.json`, `MANUAL_TRANSLATION_REQUIRED.md` in-browser).
+the tool does/cannot do), **Configuration** (an expandable "Step 0" at
+the top walks first-time users through cloning/downloading this repo
+before anything else, then fills in the same `.env` values as
+`config/.env.template`), **Phase 1: On-Prem**, **Phase 2: Fabric**, and
+**Reports** (renders `MIGRATION_REPORT.md`, `feasibility_report.json`,
+`MANUAL_TRANSLATION_REQUIRED.md` in-browser).
 Each step button runs the exact same orchestrator subprocess as the CLI
 and streams its console output live. Every step also shows a short
 caption explaining what it does and why, so users don't need to consult

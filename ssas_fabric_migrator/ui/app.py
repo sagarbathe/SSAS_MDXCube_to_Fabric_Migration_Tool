@@ -309,6 +309,38 @@ def render_readme_tab():
 
 def render_config_tab():
     st.subheader("Connection configuration")
+
+    is_git_repo = os.path.isdir(os.path.join(REPO_ROOT, ".git"))
+    with st.expander(
+        "Step 0: Get this tool onto your machine (clone the repo)",
+        expanded=not is_git_repo,
+    ):
+        st.markdown(
+            "Everything this app needs - the pipeline code, `config/.env.template`, "
+            "and (once you save below) your own `config/.env` file - lives inside "
+            "one folder: a local clone/download of this repository. If you haven't "
+            "done that on **this machine** yet, do it first:"
+        )
+        st.code(
+            "git clone https://github.com/sagarbathe/SSAS_MDXCube_to_Fabric_Migration_Tool.git\n"
+            "cd SSAS_MDXCube_to_Fabric_Migration_Tool",
+            language="powershell",
+        )
+        st.markdown(
+            "No `git` installed? Download the ZIP instead from the repo's green "
+            "**Code -> Download ZIP** button on GitHub, then extract it anywhere on "
+            "this machine. Either way, launch this Streamlit app **from inside that "
+            "folder** (see README Section 11) so the paths below resolve correctly - "
+            "this app currently sees its own repo folder as:"
+        )
+        st.code(REPO_ROOT, language="text")
+        st.markdown(
+            "Then follow [README Sections 3-4](https://github.com/sagarbathe/"
+            "SSAS_MDXCube_to_Fabric_Migration_Tool/blob/main/README.md"
+            "#3-prerequisites) to install prerequisites/dependencies before using "
+            "the steps below."
+        )
+
     st.caption(
         "These values are written to a local `.env` file (git-ignored) and read by "
         "every pipeline step, exactly like the CLI's `--env-file` argument."
