@@ -1,9 +1,25 @@
-streamlit==1.60.0
+streamlit==1.58.0
 
-# Pinned to 1.60.0+ specifically because it requires pandas<4 (compatible
-# with this repo's pandas==3.0.5 pin in requirements.txt) - streamlit<1.60
-# requires pandas<3 and will fail to resolve alongside requirements.txt.
+# Pinned to 1.58.0 specifically: it is the first Streamlit release with no
+# upper bound on pyarrow (just pyarrow>=7.0) while still requiring
+# pandas<4 - both compatible with this repo's requirements.txt pins
+# (pyarrow==25.0.0, pandas==3.0.5). Earlier/later Streamlit releases add a
+# pyarrow upper bound (e.g. 1.51.0 needs pyarrow<22, 1.60.0 needs
+# pyarrow<25) that conflicts with pyarrow==25.0.0 and fails with
+# ResolutionImpossible.
 #
-# Install with:  pip install -r requirements.txt -r requirements-ui.txt
-# Then launch:   streamlit run ssas_fabric_migrator/ui/app.py
-# Use the same x64 Python interpreter as the CLI (see requirements.txt note).
+# IMPORTANT: install this in its OWN isolated virtual environment, NOT the
+# same environment as requirements.txt. app.py has no direct dependency on
+# pandas/pyarrow/pythonnet/deltalake - it only shells out via subprocess to
+# whichever Python interpreter you configure in the UI's "Python
+# executable" field (point that at your requirements.txt environment).
+# Installing streamlit alongside requirements.txt in one environment risks
+# pip silently resolving down to different pyarrow/pandas versions than
+# the pipeline was pinned/tested against.
+#
+# Setup (run once, using your x64 Python):
+#   <path-to-x64-python>\python.exe -m venv .venv-ui
+#   .venv-ui\Scripts\python.exe -m pip install -r requirements-ui.txt
+#
+# Launch:
+#   .venv-ui\Scripts\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py

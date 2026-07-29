@@ -787,37 +787,43 @@ requirements-ui.txt                        Additional dependency (streamlit) for
 A lightweight [Streamlit](https://streamlit.io) web app is included so
 users can drive the whole pipeline from a browser instead of typing CLI
 commands - it is a thin wrapper around the same modules the CLI uses
-(`orchestrator.py` and friends); it adds no new pipeline logic.
+(`orchestrator.py` and friends); it adds no new pipeline logic. `app.py`
+itself has **no dependency on pandas/pyarrow/pythonnet/deltalake** - it
+only shells out via subprocess to whichever Python interpreter you
+configure in its "Python executable" field, exactly like calling the CLI
+by hand.
 
-**Install and run:**
+**Install the UI in its own isolated virtual environment - do NOT install
+`requirements-ui.txt` into the same environment as `requirements.txt`.**
+Streamlit's own pandas/pyarrow version constraints change across
+releases, and resolving it together with this repo's pinned pipeline
+dependencies can silently downgrade `pyarrow`/`pandas` to versions the
+pipeline wasn't tested against (or fail outright with
+`ResolutionImpossible`). Keeping them in separate environments avoids this
+entire class of conflict, present and future:
 
 ```powershell
-<path-to-x64-python>\python.exe -m pip install -r requirements.txt -r requirements-ui.txt
-<path-to-x64-python>\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py
+<path-to-x64-python>\python.exe -m venv .venv-ui
+.venv-ui\Scripts\python.exe -m pip install -r requirements-ui.txt
+.venv-ui\Scripts\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py
 ```
 
 Use the **same explicit x64 Python path** as [Section 4](#4-install-dependencies)
-- do not use bare `pip`/`streamlit`/`python`, since on Windows-on-ARM they
-often resolve to an ARM64 interpreter that cannot install `deltalake`/
-`pyarrow` (`ERROR: No matching distribution found for deltalake==...`).
-If you also want `pip`/`streamlit` to work as bare commands in a given
-terminal session, temporarily prepend the x64 interpreter's folder (and
-its `Scripts` subfolder) to `PATH` in that session only, e.g.:
+only to *create* `.venv-ui` - once created, `.venv-ui\Scripts\python.exe`
+is itself the interpreter to use for every `pip`/`streamlit` command
+above (no need to reference the original x64 path again). This sidesteps
+the ARM64-resolves-by-default pitfall too, since a venv's own
+`python.exe`/`pip` always point at the interpreter it was created from.
 
-```powershell
-$env:Path = "<path-to-x64-python-folder>;<path-to-x64-python-folder>\Scripts;" + $env:Path
-pip install -r requirements.txt -r requirements-ui.txt
-streamlit run ssas_fabric_migrator\ui\app.py
-```
-
-`requirements-ui.txt` pins `streamlit==1.60.0` specifically because it is
-the first release that supports `pandas<4` - this repo's core
-`requirements.txt` pins `pandas==3.0.5`, and older Streamlit releases
-(<=1.59, which require `pandas<3`) fail to install alongside it with
-`ERROR: Cannot install pandas==3.0.5 and streamlit==... because these
-package versions have conflicting dependencies`. If you ever bump either
-pin, re-run `pip install -r requirements.txt -r requirements-ui.txt` and
-check for this same conflict before committing.
+`requirements-ui.txt` pins `streamlit==1.58.0` specifically: it is the
+first release with **no upper bound on `pyarrow`** (just `pyarrow>=7.0`)
+while still allowing `pandas<4` - both compatible with this repo's
+`requirements.txt` pins (`pyarrow==25.0.0`, `pandas==3.0.5`). Nearby
+releases both older and newer add a `pyarrow` upper bound that conflicts
+with `pyarrow==25.0.0` (e.g. `1.51.0` needs `pyarrow<22`, `1.60.0` needs
+`pyarrow<25`) - since these are installed in separate environments this
+no longer matters for resolution, but it explains the exact version
+chosen if you ever need to bump it.
 
 Then open the printed `http://localhost:8501` URL in a browser. The app
 has tabs for: Configuration (fills in the same `.env` values as
@@ -825,9 +831,10 @@ has tabs for: Configuration (fills in the same `.env` values as
 upload (`upload-data`), and Reports (renders `MIGRATION_REPORT.md`,
 `feasibility_report.json`, `MANUAL_TRANSLATION_REQUIRED.md` in-browser).
 Each step button runs the exact same orchestrator subprocess as the CLI
-and streams its console output live. Note that the UI's own "Python
-executable" field (Configuration tab) must also point at this same x64
-`python.exe`, since it is what actually runs each pipeline step.
+and streams its console output live. **On the Configuration tab, set
+"Python executable" to the x64 `python.exe` that has `requirements.txt`
+installed** (not `.venv-ui`'s interpreter) - that is what actually runs
+each pipeline step (AMO extraction, Delta writes, Fabric REST calls).
 
 ### Deployment topology: "any device with connectivity"
 
@@ -841,7 +848,7 @@ reach it over the network via a plain browser - no client install needed
 on their own machine:
 
 ```powershell
-<path-to-x64-python>\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py --server.address 0.0.0.0 --server.port 8501
+.venv-ui\Scripts\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
 Then browse to `http://<that-host>:8501` from any laptop, tablet, or thin
