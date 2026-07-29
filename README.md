@@ -192,9 +192,38 @@ Phase 1 deliberately does **not** require internet or Fabric access - see
 
 ## 4. Install Dependencies
 
+**First, confirm which `python`/`pip` you actually have on PATH** - on
+Windows-on-ARM machines it is common to have both an ARM64 Python (from
+the Microsoft Store or a generic installer) and an x64 Python side by
+side, and the ARM64 one is often what `python`/`pip` resolve to by
+default. `pyarrow`, `cryptography`, and `deltalake` publish **no
+`win-arm64` wheels**, so installing/running with the ARM64 interpreter
+fails with `ERROR: No matching distribution found for deltalake==...` (or
+similar for `pyarrow`/`cryptography`). Check with:
+
+```powershell
+python -c "import sysconfig; print(sysconfig.get_platform())"
+```
+
+- `win-amd64` -> this is an x64 interpreter, safe to use directly.
+- `win-arm64` -> this is the ARM64 interpreter; you need a **separate x64
+  Python install** instead (e.g. download the "Windows installer (64-bit)"
+  from python.org, which runs fine under Windows-on-ARM's x64 emulation).
+  Find/confirm its path with `where python` (it will list every `python.exe`
+  on PATH) or just note the folder you installed it to.
+
+Once you have the x64 interpreter's path, **always call it explicitly**
+rather than relying on bare `python`/`pip` (which may keep resolving to
+the ARM64 one):
+
 ```powershell
 <path-to-x64-python>\python.exe -m pip install -r requirements.txt
 ```
+
+e.g. `C:\Users\<you>\Python312-x64\python.exe -m pip install -r requirements.txt`.
+Every command in this README that runs a pipeline step, the UI, or
+installs a dependency should use this same explicit x64 `python.exe` path
+- substitute your own path anywhere you see `<path-to-x64-python>`.
 
 Run this on every machine that will execute any step (Phase 1 machine,
 Phase 2 machine, or both if they are the same box).
@@ -763,6 +792,20 @@ commands - it is a thin wrapper around the same modules the CLI uses
 **Install and run:**
 
 ```powershell
+<path-to-x64-python>\python.exe -m pip install -r requirements.txt -r requirements-ui.txt
+<path-to-x64-python>\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py
+```
+
+Use the **same explicit x64 Python path** as [Section 4](#4-install-dependencies)
+- do not use bare `pip`/`streamlit`/`python`, since on Windows-on-ARM they
+often resolve to an ARM64 interpreter that cannot install `deltalake`/
+`pyarrow` (`ERROR: No matching distribution found for deltalake==...`).
+If you also want `pip`/`streamlit` to work as bare commands in a given
+terminal session, temporarily prepend the x64 interpreter's folder (and
+its `Scripts` subfolder) to `PATH` in that session only, e.g.:
+
+```powershell
+$env:Path = "<path-to-x64-python-folder>;<path-to-x64-python-folder>\Scripts;" + $env:Path
 pip install -r requirements.txt -r requirements-ui.txt
 streamlit run ssas_fabric_migrator\ui\app.py
 ```
@@ -773,7 +816,9 @@ has tabs for: Configuration (fills in the same `.env` values as
 upload (`upload-data`), and Reports (renders `MIGRATION_REPORT.md`,
 `feasibility_report.json`, `MANUAL_TRANSLATION_REQUIRED.md` in-browser).
 Each step button runs the exact same orchestrator subprocess as the CLI
-and streams its console output live.
+and streams its console output live. Note that the UI's own "Python
+executable" field (Configuration tab) must also point at this same x64
+`python.exe`, since it is what actually runs each pipeline step.
 
 ### Deployment topology: "any device with connectivity"
 
@@ -787,7 +832,7 @@ reach it over the network via a plain browser - no client install needed
 on their own machine:
 
 ```powershell
-streamlit run ssas_fabric_migrator\ui\app.py --server.address 0.0.0.0 --server.port 8501
+<path-to-x64-python>\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
 Then browse to `http://<that-host>:8501` from any laptop, tablet, or thin
