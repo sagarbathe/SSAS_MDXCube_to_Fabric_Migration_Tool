@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -35,6 +36,13 @@ import streamlit as st
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 README_PATH = os.path.join(REPO_ROOT, "README.md")
+# Used to rewrite README.md's in-file anchor links (e.g. "(#3-prerequisites)") into
+# absolute GitHub links when rendering excerpts in the Read Me tab - GitHub auto-generates
+# heading anchors so these resolve there, but Streamlit's markdown renderer does not, and
+# the Read Me tab only shows excerpts (not the full file) so in-app anchors would be dead.
+README_GITHUB_URL = (
+    "https://github.com/sagarbathe/SSAS_MDXCube_to_Fabric_Migration_Tool/blob/main/README.md"
+)
 
 ENV_FIELDS = [
     ("SSAS_SERVER", "On-prem SSAS server\\instance", False, "LAPTOP-LQVSA8VE\\SSAS"),
@@ -233,6 +241,13 @@ def list_lakehouses():
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
+def _rewrite_readme_anchors(markdown_text: str) -> str:
+    """Rewrites in-file anchor links like "(#3-prerequisites)" into absolute links to the
+    README on GitHub, where they actually resolve (GitHub auto-generates heading anchors;
+    Streamlit's markdown renderer does not, and this tab only shows excerpts of the file)."""
+    return re.sub(r"\]\(#([a-z0-9\-]+)\)", rf"]({README_GITHUB_URL}#\1)", markdown_text)
+
+
 def render_readme_tab():
     st.subheader("What this tool is - quick summary")
     st.markdown(
@@ -271,23 +286,25 @@ def render_readme_tab():
     st.divider()
     st.subheader("What this tool DOES (Section 1: Purpose / Objective)")
     if purpose_key:
-        st.markdown(sections[purpose_key])
+        st.markdown(_rewrite_readme_anchors(sections[purpose_key]))
     else:
         st.info("Purpose/Objective section not found in README.md.")
 
     st.divider()
     st.subheader("What this tool CANNOT do / Limitations (Section 10)")
     if limitations_key:
-        st.markdown(sections[limitations_key])
+        st.markdown(_rewrite_readme_anchors(sections[limitations_key]))
     else:
         st.info("Limitations section not found in README.md.")
 
     st.divider()
     st.caption(
-        "This is a live summary pulled directly from README.md in the repo root - "
-        "see that file for the full step-by-step walkthrough, prerequisites, "
-        "architecture diagram, and all other sections."
+        "This is a live summary pulled directly from README.md in the repo root. Links to "
+        "other sections (e.g. 'Section 3') open the full README on GitHub, since this tab "
+        "only shows excerpts - see the full file there for the step-by-step walkthrough, "
+        "prerequisites, architecture diagram, and all other sections."
     )
+    st.link_button("Open full README.md on GitHub", README_GITHUB_URL)
 
 
 def render_config_tab():

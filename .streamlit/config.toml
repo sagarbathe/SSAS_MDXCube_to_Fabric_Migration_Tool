@@ -5,3 +5,12 @@
 # connectivity to on-prem SSAS/SQL Server and Fabric (see README Section 11),
 # not via Streamlit Community Cloud.
 toolbarMode = "minimal"
+
+[theme]
+# Approximates the Microsoft Fabric/Fluent UI portal look (app.fabric.microsoft.com):
+# Fluent "Brand Blue" primary accent, light neutral surfaces, dark neutral text.
+primaryColor = "#0F6CBD"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F2F1"
+textColor = "#252423"
+font = "sans serif"
