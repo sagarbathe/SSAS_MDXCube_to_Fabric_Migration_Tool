@@ -499,6 +499,20 @@ python -m ssas_fabric_migrator.cli.orchestrator --steps "migrate-data" `
 **Input:** the `output\delta\` folder produced by the optional Phase 1 export step, transferred to this machine.
 **Output:** one Delta table per source table, written into the Lakehouse via OneLake.
 
+> **What's manual vs. automated here:** the only manual part is copying
+> the `output\delta\<table>\` folders (Parquet data files + a
+> `_delta_log\` folder with JSON transaction logs, produced by
+> `loader.py --target local` back in Phase 1) from the on-prem machine to
+> this Fabric-connected one - by whatever secure file-transfer method your
+> organization already approves for moving files between these network
+> zones (USB drive, internal file share, SCP, etc.); this tool
+> intentionally does not automate or prescribe that transfer. **You do
+> not manually upload anything into OneLake itself** - once the folder is
+> on this machine, `upload-data` below reads it and writes it into the
+> Lakehouse's OneLake storage programmatically (via the `deltalake`
+> Python library + your Fabric credentials), the same way `migrate-data`
+> does in Option A.
+
 ```powershell
 python -m ssas_fabric_migrator.cli.orchestrator --steps "upload-data" `
   --env-file "config\.env" --output-dir "output" --lakehouse-name "<LakehouseName>" `
