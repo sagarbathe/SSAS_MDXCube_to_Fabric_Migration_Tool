@@ -836,9 +836,11 @@ button and Streamlit-Cloud menu options - those are unrelated to this
 tool (they publish to Streamlit Community Cloud) and are suppressed to
 avoid confusion, since this app is meant to be hosted on your own Windows
 machine per the topology described below, not on Streamlit Cloud. The
-same file also sets a dark `[theme]`/`[theme.sidebar]` using **Microsoft
-Fabric's own brand teal (`#00B7C3`)** as a dominant accent - it drives
-`primaryColor`, `linkColor`, widget borders, and every clickable button
+same file also sets a dark `[theme]`/`[theme.sidebar]` using a **darker
+teal (`#00B7C3` for links, `#006D77` for `primaryColor`/buttons - chosen
+specifically for readable white text at ~6:1 contrast)** as a dominant
+accent - it drives `primaryColor`, `linkColor`, widget borders, and every
+clickable button
 (every `st.button`/`st.form_submit_button`/`st.link_button` in `app.py`
 uses `type="primary"`, so buttons render solid-filled teal, not just
 outlined) - on a near-black, teal-tinted dark canvas. Edit
