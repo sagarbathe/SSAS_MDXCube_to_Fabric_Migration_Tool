@@ -7,10 +7,24 @@
 toolbarMode = "minimal"
 
 [theme]
-# Approximates the Microsoft Fabric/Fluent UI portal look (app.fabric.microsoft.com):
-# Fluent "Brand Blue" primary accent, light neutral surfaces, dark neutral text.
-primaryColor = "#0F6CBD"
+# Approximates the Microsoft Fabric portal look (app.fabric.microsoft.com):
+# Fabric's own brand teal (#00B7C3) as the primary accent, light Fluent-neutral
+# surfaces/borders, dark Fluent-neutral text, rounded widgets like Fluent UI.
+primaryColor = "#00B7C3"
 backgroundColor = "#FFFFFF"
 secondaryBackgroundColor = "#F3F2F1"
 textColor = "#252423"
+linkColor = "#00B7C3"
+borderColor = "#D2D0CE"
+baseRadius = "medium"
+buttonRadius = "medium"
+showWidgetBorder = true
 font = "sans serif"
+
+[theme.sidebar]
+# Subtle teal-tinted surface for the sidebar, keeping the same accent/text colors.
+primaryColor = "#00B7C3"
+backgroundColor = "#EFFBFC"
+secondaryBackgroundColor = "#E1F6F7"
+textColor = "#252423"
+borderColor = "#BFE9EB"
