@@ -810,6 +810,15 @@ pip install -r requirements.txt -r requirements-ui.txt
 streamlit run ssas_fabric_migrator\ui\app.py
 ```
 
+`requirements-ui.txt` pins `streamlit==1.60.0` specifically because it is
+the first release that supports `pandas<4` - this repo's core
+`requirements.txt` pins `pandas==3.0.5`, and older Streamlit releases
+(<=1.59, which require `pandas<3`) fail to install alongside it with
+`ERROR: Cannot install pandas==3.0.5 and streamlit==... because these
+package versions have conflicting dependencies`. If you ever bump either
+pin, re-run `pip install -r requirements.txt -r requirements-ui.txt` and
+check for this same conflict before committing.
+
 Then open the printed `http://localhost:8501` URL in a browser. The app
 has tabs for: Configuration (fills in the same `.env` values as
 `config/.env.template`), Phase 1: On-Prem, Phase 2: Fabric, Air-gapped

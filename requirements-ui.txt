@@ -1,5 +1,9 @@
-streamlit==1.51.0
+streamlit==1.60.0
 
+# Pinned to 1.60.0+ specifically because it requires pandas<4 (compatible
+# with this repo's pandas==3.0.5 pin in requirements.txt) - streamlit<1.60
+# requires pandas<3 and will fail to resolve alongside requirements.txt.
+#
 # Install with:  pip install -r requirements.txt -r requirements-ui.txt
 # Then launch:   streamlit run ssas_fabric_migrator/ui/app.py
 # Use the same x64 Python interpreter as the CLI (see requirements.txt note).
