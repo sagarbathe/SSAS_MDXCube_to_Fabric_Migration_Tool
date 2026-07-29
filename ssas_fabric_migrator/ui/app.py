@@ -330,6 +330,19 @@ def render_config_tab():
             except Exception as e:
                 st.error(f"Could not load: {e}")
 
+    env_path_for_display = st.session_state["env_file"]
+    full_env_path = (
+        env_path_for_display if os.path.isabs(env_path_for_display)
+        else os.path.join(REPO_ROOT, env_path_for_display)
+    )
+    exists_note = "exists" if os.path.exists(full_env_path) else "does not exist yet - will be created on Save"
+    st.info(
+        f"This env file lives on disk at:\n\n`{full_env_path}`\n\n"
+        f"({exists_note}) - open it directly in a text editor if you'd rather edit it "
+        f"outside this UI. It's git-ignored, so its contents (including secrets) are "
+        f"never committed to the repo."
+    )
+
     with st.form("env_form"):
         for key, label, is_secret, _default in ENV_FIELDS:
             st.session_state["env_values"][key] = st.text_input(
