@@ -102,7 +102,18 @@ def _write(path, content):
         f.write(content)
 
 
-def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl="", mode="DirectLake"):
+def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl="", mode="DirectLake", physical_table_name=None):
+    """
+    table_name: logical Tabular table name shown in the model (kept
+        identical to the source relational table name).
+    physical_table_name: the actual Lakehouse Delta table name this binds
+        to - defaults to table_name, but differs when a --table-prefix is
+        used (e.g. logical table "Dim_Date" bound to physical Lakehouse
+        table "stg_Dim_Date"). Only the entityName/Import source Item=
+        binding uses this - the logical table name (and therefore
+        relationships/measures referencing it) is unaffected by a prefix.
+    """
+    physical_table_name = physical_table_name or table_name
     lines = []
     lines.append("table " + _quote_name(table_name))
     lines.append("")
@@ -132,7 +143,7 @@ def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl="", mod
         lines.append("\t\tsource =")
         lines.append("\t\t\t\tlet")
         lines.append('\t\t\t\t\tSource = DatabaseQuery,')
-        lines.append('\t\t\t\t\tdbo_Table = Source{[Schema="dbo",Item="' + table_name + '"]}[Data]')
+        lines.append('\t\t\t\t\tdbo_Table = Source{[Schema="dbo",Item="' + physical_table_name + '"]}[Data]')
         lines.append("\t\t\t\tin")
         lines.append("\t\t\t\t\tdbo_Table")
         lines.append("")
@@ -140,7 +151,7 @@ def _gen_table_tmdl(table_name, columns, hierarchies=None, measures_tmdl="", mod
         lines.append("\tpartition " + _quote_name(table_name) + " = entity")
         lines.append("\t\tmode: directLake")
         lines.append("\t\tsource")
-        lines.append("\t\t\tentityName: " + table_name)
+        lines.append("\t\t\tentityName: " + physical_table_name)
         lines.append("\t\t\tschemaName: dbo")
         lines.append("\t\t\texpressionSource: DatabaseQuery")
         lines.append("")
@@ -179,7 +190,7 @@ def _gen_relationships_tmdl(ir, dim_key_columns):
     return "\n".join(lines)
 
 
-def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=None):
+def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=None, table_prefix=""):
     """
     ir: parsed cube_metadata.json dict
     feasibility_report: parsed feasibility_report.json dict
@@ -188,6 +199,12 @@ def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=Non
         Lakehouse SQL analytics endpoint (required for the shared M
         expression that Direct Lake / Import partitions bind to). If not
         supplied, a placeholder is emitted with a TODO comment.
+    table_prefix: optional prefix applied to the PHYSICAL Lakehouse Delta
+        table name each table's partition binds to (entityName for Direct
+        Lake, Item= for Import) - must match the prefix used when writing
+        the Delta tables (loader.py --table-prefix). The logical Tabular
+        table name shown in the model (and therefore relationships,
+        measures, hierarchies) is left unprefixed.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -210,7 +227,10 @@ def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=Non
     # --- Fact table ---
     fact_columns = _table_columns_ir(ir, fact_table)
     measures_block = _gen_measures_block(mg["measures"], fact_table, column_names={c["name"] for c in fact_columns})
-    fact_tmdl = _gen_table_tmdl(fact_table, fact_columns, measures_tmdl=measures_block, mode=mode)
+    fact_tmdl = _gen_table_tmdl(
+        fact_table, fact_columns, measures_tmdl=measures_block, mode=mode,
+        physical_table_name=table_prefix + fact_table,
+    )
     _write(os.path.join(tables_dir, fact_table + ".tmdl"), fact_tmdl)
 
     # --- Dimension tables ---
@@ -236,7 +256,10 @@ def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=Non
                 resolved_levels.append({"name": lvl["name"], "source_attribute_name": col_name or lvl["name"]})
             resolved_hierarchies.append({"name": hier["name"], "levels": resolved_levels})
 
-        dim_tmdl = _gen_table_tmdl(dim_table, dim_columns, hierarchies=resolved_hierarchies, mode=mode)
+        dim_tmdl = _gen_table_tmdl(
+            dim_table, dim_columns, hierarchies=resolved_hierarchies, mode=mode,
+            physical_table_name=table_prefix + dim_table,
+        )
         _write(os.path.join(tables_dir, dim_table + ".tmdl"), dim_tmdl)
 
     # --- Relationships ---
@@ -306,12 +329,12 @@ def generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint=Non
     return {"output_dir": output_dir, "mode": mode}
 
 
-def generate_from_files(metadata_path, feasibility_path, output_dir, lakehouse_sql_endpoint=None):
+def generate_from_files(metadata_path, feasibility_path, output_dir, lakehouse_sql_endpoint=None, table_prefix=""):
     with open(metadata_path, "r", encoding="utf-8") as f:
         ir = json.load(f)
     with open(feasibility_path, "r", encoding="utf-8") as f:
         feasibility_report = json.load(f)
-    return generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint)
+    return generate_tmdl(ir, feasibility_report, output_dir, lakehouse_sql_endpoint, table_prefix=table_prefix)
 
 
 if __name__ == "__main__":
@@ -322,7 +345,12 @@ if __name__ == "__main__":
     parser.add_argument("--feasibility", default="output/feasibility_report.json")
     parser.add_argument("--output", default="output/SemanticModel")
     parser.add_argument("--lakehouse-endpoint", default=None)
+    parser.add_argument(
+        "--table-prefix", default="",
+        help="Optional prefix applied to the physical Lakehouse table name each table's partition "
+             "binds to - must match the prefix used with loader.py --table-prefix.",
+    )
     args = parser.parse_args()
 
-    result = generate_from_files(args.metadata, args.feasibility, args.output, args.lakehouse_endpoint)
+    result = generate_from_files(args.metadata, args.feasibility, args.output, args.lakehouse_endpoint, args.table_prefix)
     print("Generated TMDL model at " + result["output_dir"] + " (mode: " + result["mode"] + ")")

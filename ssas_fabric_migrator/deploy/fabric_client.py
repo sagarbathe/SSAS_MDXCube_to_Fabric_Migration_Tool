@@ -58,6 +58,12 @@ class FabricClient:
         if r.status_code not in (200, 204):
             raise RuntimeError(f"DELETE /workspaces/{workspace_id}/items/{item_id} failed: {r.status_code} {r.text}")
 
+    def list_items(self, workspace_id, item_type):
+        """Returns every item of the given type (e.g. 'Lakehouse') in the workspace - used by the
+        UI to let a user pick an existing Lakehouse from a dropdown instead of typing its exact name."""
+        items = self._get(f"/workspaces/{workspace_id}/items")
+        return [item for item in items.get("value", []) if item.get("type") == item_type]
+
     def find_item(self, workspace_id, display_name, item_type):
         items = self._get(f"/workspaces/{workspace_id}/items")
         for item in items.get("value", []):

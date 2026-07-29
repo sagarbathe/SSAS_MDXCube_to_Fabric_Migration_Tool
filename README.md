@@ -848,15 +848,48 @@ no longer matters for resolution, but it explains the exact version
 chosen if you ever need to bump it.
 
 Then open the printed `http://localhost:8501` URL in a browser. The app
-has tabs for: Configuration (fills in the same `.env` values as
-`config/.env.template`), Phase 1: On-Prem, Phase 2: Fabric, Air-gapped
-upload (`upload-data`), and Reports (renders `MIGRATION_REPORT.md`,
+has tabs for: **Read Me** (live summary of this file, highlighting what
+the tool does/cannot do), **Configuration** (fills in the same `.env`
+values as `config/.env.template`), **Phase 1: On-Prem**, **Phase 2:
+Fabric**, and **Reports** (renders `MIGRATION_REPORT.md`,
 `feasibility_report.json`, `MANUAL_TRANSLATION_REQUIRED.md` in-browser).
 Each step button runs the exact same orchestrator subprocess as the CLI
-and streams its console output live. **On the Configuration tab, set
+and streams its console output live. Every step also shows a short
+caption explaining what it does and why, so users don't need to consult
+this README while clicking through. **On the Configuration tab, set
 "Python executable" to the x64 `python.exe` that has `requirements.txt`
 installed** (not `.venv-ui`'s interpreter) - that is what actually runs
 each pipeline step (AMO extraction, Delta writes, Fabric REST calls).
+
+### Lakehouse selection and table-name prefixing
+
+The Phase 2 tab's Step 5 lets you either pick an existing Lakehouse from
+a dropdown (click **Refresh list of Lakehouses**, which lists items via
+the Fabric REST API) or create a new one by name - both map to the same
+underlying `deploy-lake` step and `FabricClient.create_lakehouse()`
+find-or-create logic. You can also set an optional **Delta table name
+prefix** (e.g. `stg_`), useful when sharing one Lakehouse across several
+cube migrations. The prefix applies only to the *physical* Delta table
+name written into the Lakehouse (and the corresponding TMDL partition
+binding) - it does not change the source SQL table name, the local
+export folder name, or the logical table name shown in the Power BI
+semantic model. This is also available on the CLI directly via
+`--table-prefix` on `orchestrator.py` (`generate`, `migrate-data`,
+`upload-data` steps) or `datamover/loader.py`.
+
+### Choosing a data-migration method in the UI
+
+Step 6 in the Phase 2 tab replaces the old separate "Air-gapped upload"
+tab with a single choice, right where you'd otherwise click "Migrate
+data": **Direct migration** (this host reaches both SQL Server and
+Fabric - runs `migrate-data`) or **Offline transfer** (export locally,
+then upload separately - runs the two-step `local export` +
+`upload-data` flow for isolated/air-gapped networks, see
+[Section 6, Option B](#6-phase-2-fabric-connected)). An expander next to
+this choice summarizes the other Fabric-native ingestion options from
+[Section 7](#7-alternative-data-migration-options-for-review) (Mirroring,
+Open Mirroring, Data Factory, Dataflows Gen2, Spark notebooks) that this
+tool does not implement, for teams evaluating alternatives.
 
 ### Deployment topology: "any device with connectivity"
 

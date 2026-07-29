@@ -122,10 +122,12 @@ def upload_local_delta_to_onelake(local_table_dir, workspace_id, lakehouse_id, t
     return write_delta_onelake(df, workspace_id, lakehouse_id, table_name, credential, mode), len(df)
 
 
-def upload_all_local_tables(local_root, workspace_id, lakehouse_id, credential, mode="overwrite"):
+def upload_all_local_tables(local_root, workspace_id, lakehouse_id, credential, mode="overwrite", table_prefix=""):
     """
     Uploads every Delta table subfolder found directly under local_root
     (as produced by migrate_all_tables(..., target="local")) to OneLake.
+    table_prefix is prepended to the destination table name only (the local
+    folder name/source table name is unaffected).
     Returns dict of table_name -> {"rows": n, "path": ...}.
     """
     results = {}
@@ -133,14 +135,21 @@ def upload_all_local_tables(local_root, workspace_id, lakehouse_id, credential, 
         table_dir = os.path.join(local_root, entry)
         if not os.path.isdir(table_dir):
             continue
-        path, rows = upload_local_delta_to_onelake(table_dir, workspace_id, lakehouse_id, entry, credential, mode)
+        path, rows = upload_local_delta_to_onelake(table_dir, workspace_id, lakehouse_id, table_prefix + entry, credential, mode)
         results[entry] = {"rows": rows, "path": path}
     return results
 
 
-def migrate_all_tables(ir, sql_server, sql_database, target, **target_kwargs):
+def migrate_all_tables(ir, sql_server, sql_database, target, table_prefix="", **target_kwargs):
     """
     target: "local" or "onelake"
+    table_prefix: optional prefix prepended to the DESTINATION Delta table
+        name only (e.g. "stg_"). The source SQL table name read from is
+        never affected. Only applied for target="onelake" - the local
+        export ("local") always keeps folder names matching the source
+        table name, since tmdl_generator applies the same prefix logic
+        separately when generating the semantic model's physical table
+        bindings (entityName/Import source Item=).
     target_kwargs:
       local  -> output_dir=<path>
       onelake -> workspace_id=..., lakehouse_id=..., credential=<TokenCredential>
@@ -156,7 +165,7 @@ def migrate_all_tables(ir, sql_server, sql_database, target, **target_kwargs):
                 df,
                 target_kwargs["workspace_id"],
                 target_kwargs["lakehouse_id"],
-                table_name,
+                table_prefix + table_name,
                 target_kwargs["credential"],
             )
         else:
@@ -186,6 +195,12 @@ if __name__ == "__main__":
     parser.add_argument("--local-dir", default=None, help="Required for --target upload: folder produced by --target local")
     parser.add_argument("--workspace-id", default=None)
     parser.add_argument("--lakehouse-id", default=None)
+    parser.add_argument(
+        "--table-prefix", default="",
+        help="Optional prefix prepended to the DESTINATION Delta table name in the Lakehouse "
+             "only (e.g. 'stg_') - used by --target onelake/upload. The source SQL table name "
+             "and local export folder name are never affected.",
+    )
     args = parser.parse_args()
 
     if args.target == "local":
@@ -207,7 +222,7 @@ if __name__ == "__main__":
             client_secret=os.environ["FABRIC_CLIENT_SECRET"],
         )
         res = migrate_all_tables(
-            ir, args.sql_server, args.sql_database, "onelake",
+            ir, args.sql_server, args.sql_database, "onelake", table_prefix=args.table_prefix,
             workspace_id=args.workspace_id, lakehouse_id=args.lakehouse_id, credential=cred,
         )
     else:  # upload
@@ -221,7 +236,7 @@ if __name__ == "__main__":
             client_secret=os.environ["FABRIC_CLIENT_SECRET"],
         )
         res = upload_all_local_tables(
-            args.local_dir, args.workspace_id, args.lakehouse_id, cred,
+            args.local_dir, args.workspace_id, args.lakehouse_id, cred, table_prefix=args.table_prefix,
         )
 
     for table_name, info in res.items():
