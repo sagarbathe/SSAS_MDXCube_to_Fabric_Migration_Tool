@@ -304,7 +304,7 @@ def render_readme_tab():
         "only shows excerpts - see the full file there for the step-by-step walkthrough, "
         "prerequisites, architecture diagram, and all other sections."
     )
-    st.link_button("Open full README.md on GitHub", README_GITHUB_URL)
+    st.link_button("Open full README.md on GitHub", README_GITHUB_URL, type="primary")
 
 
 def render_config_tab():
@@ -323,7 +323,7 @@ def render_config_tab():
     with col2:
         st.write("")
         st.write("")
-        if st.button("Load from file"):
+        if st.button("Load from file", type="primary"):
             try:
                 load_env_file(st.session_state["env_file"])
                 st.success("Loaded.")
@@ -336,7 +336,7 @@ def render_config_tab():
                 label, value=st.session_state["env_values"].get(key, ""),
                 type="password" if is_secret else "default", key=f"field_{key}",
             )
-        submitted = st.form_submit_button("Save to env file")
+        submitted = st.form_submit_button("Save to env file", type="primary")
         if submitted:
             try:
                 save_env_file(st.session_state["env_file"])
@@ -368,7 +368,7 @@ def render_phase1_tab():
     for step in PHASE1_STEPS:
         st.markdown(f"**{STEP_LABELS[step]}**")
         st.caption(STEP_DESCRIPTIONS[step])
-        if st.button("Run this step", key=f"p1_{step}"):
+        if st.button("Run this step", key=f"p1_{step}", type="primary"):
             run_steps([step], log_area)
         st.divider()
     if st.button("Run all of Phase 1", key="p1_all", type="primary"):
@@ -392,7 +392,7 @@ def render_phase2_tab():
     if st.session_state["lakehouse_mode"] == "existing":
         col_a, col_b = st.columns([1, 2])
         with col_a:
-            if st.button("Refresh list of Lakehouses"):
+            if st.button("Refresh list of Lakehouses", type="primary"):
                 try:
                     st.session_state["available_lakehouses"] = list_lakehouses()
                     st.success(f"Found {len(st.session_state['available_lakehouses'])} Lakehouse(s).")
@@ -422,7 +422,7 @@ def render_phase2_tab():
             "the underlying physical Lakehouse table name changes."
         ),
     )
-    if st.button("Deploy / find Lakehouse", key="p2_deploy_lake"):
+    if st.button("Deploy / find Lakehouse", key="p2_deploy_lake", type="primary"):
         run_steps(["deploy-lake"], log_area)
 
     st.divider()
@@ -443,7 +443,7 @@ def render_phase2_tab():
 
     if st.session_state["migration_method"] == "direct":
         st.caption(STEP_DESCRIPTIONS["migrate-data"])
-        if st.button("Migrate data now", key="p2_migrate_direct"):
+        if st.button("Migrate data now", key="p2_migrate_direct", type="primary"):
             run_steps(["migrate-data"], log_area)
     else:
         st.markdown("**Step 1 of 2: export SQL Server tables to local Delta files**")
@@ -454,7 +454,7 @@ def render_phase2_tab():
         st.session_state["local_export_dir"] = st.text_input(
             "Local export folder", value=st.session_state["local_export_dir"], key="local_export_dir_input"
         )
-        if st.button("Export to local Delta files", key="p2_export_local"):
+        if st.button("Export to local Delta files", key="p2_export_local", type="primary"):
             run_local_export(log_area)
 
         st.markdown(
@@ -470,7 +470,7 @@ def render_phase2_tab():
             "Local Delta folder to upload (from Step 1, after transfer)",
             value=st.session_state["local_delta_dir"], key="local_delta_dir_input",
         )
-        if st.button("Upload to Lakehouse", key="p2_upload"):
+        if st.button("Upload to Lakehouse", key="p2_upload", type="primary"):
             run_steps(["upload-data"], log_area)
 
     with st.expander("Other ways to migrate data into Fabric (not implemented by this tool)"):
@@ -488,7 +488,7 @@ def render_phase2_tab():
     # --- Step 7: Deploy model ---
     st.markdown(f"**{STEP_LABELS['deploy-model']}**")
     st.caption(STEP_DESCRIPTIONS["deploy-model"])
-    if st.button("Deploy semantic model", key="p2_deploy_model"):
+    if st.button("Deploy semantic model", key="p2_deploy_model", type="primary"):
         run_steps(["deploy-model"], log_area)
 
 

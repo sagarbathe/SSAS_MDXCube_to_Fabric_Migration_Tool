@@ -7,24 +7,26 @@
 toolbarMode = "minimal"
 
 [theme]
-# Approximates the Microsoft Fabric portal look (app.fabric.microsoft.com):
-# Fabric's own brand teal (#00B7C3) as the primary accent, light Fluent-neutral
-# surfaces/borders, dark Fluent-neutral text, rounded widgets like Fluent UI.
+# Dark Microsoft Fabric-style theme: Fabric's own brand teal (#00B7C3) as a
+# dominant accent used for links, borders, and every clickable button (buttons
+# below use type="primary" in app.py, which fills solid with primaryColor), on
+# a near-black, cool-dark canvas with teal-tinted surfaces so the accent reads
+# throughout the UI, not just on isolated widgets.
 primaryColor = "#00B7C3"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F3F2F1"
-textColor = "#252423"
+backgroundColor = "#0B0F0F"
+secondaryBackgroundColor = "#102426"
+textColor = "#F3F2F1"
 linkColor = "#00B7C3"
-borderColor = "#D2D0CE"
+borderColor = "#00838C"
 baseRadius = "medium"
 buttonRadius = "medium"
 showWidgetBorder = true
 font = "sans serif"
 
 [theme.sidebar]
-# Subtle teal-tinted surface for the sidebar, keeping the same accent/text colors.
+# Dark teal-tinted sidebar, slightly darker than the main canvas for separation.
 primaryColor = "#00B7C3"
-backgroundColor = "#EFFBFC"
-secondaryBackgroundColor = "#E1F6F7"
-textColor = "#252423"
-borderColor = "#BFE9EB"
+backgroundColor = "#081A1B"
+secondaryBackgroundColor = "#0D2325"
+textColor = "#F3F2F1"
+borderColor = "#00838C"

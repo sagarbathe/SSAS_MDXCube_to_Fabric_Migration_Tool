@@ -836,13 +836,15 @@ button and Streamlit-Cloud menu options - those are unrelated to this
 tool (they publish to Streamlit Community Cloud) and are suppressed to
 avoid confusion, since this app is meant to be hosted on your own Windows
 machine per the topology described below, not on Streamlit Cloud. The
-same file also sets a `[theme]`/`[theme.sidebar]` section approximating
-the **Microsoft Fabric** portal look: Fabric's own brand teal (`#00B7C3`)
-as the primary accent/link color/button color, light Fluent-neutral
-surfaces and borders, dark Fluent-neutral text, and rounded widgets
-consistent with Fluent UI - so the app feels visually consistent with the
-Fabric portal it deploys into. Edit `.streamlit/config.toml` directly to
-adjust colors if your organization has different branding preferences.
+same file also sets a dark `[theme]`/`[theme.sidebar]` using **Microsoft
+Fabric's own brand teal (`#00B7C3`)** as a dominant accent - it drives
+`primaryColor`, `linkColor`, widget borders, and every clickable button
+(every `st.button`/`st.form_submit_button`/`st.link_button` in `app.py`
+uses `type="primary"`, so buttons render solid-filled teal, not just
+outlined) - on a near-black, teal-tinted dark canvas. Edit
+`.streamlit/config.toml` directly to adjust colors (or set `base =
+"light"` there to fall back to a light variant) if your organization has
+different branding preferences.
 
 Use the **same explicit x64 Python path** as [Section 4](#4-install-dependencies)
 only to *create* `.venv-ui` - once created, `.venv-ui\Scripts\python.exe`
