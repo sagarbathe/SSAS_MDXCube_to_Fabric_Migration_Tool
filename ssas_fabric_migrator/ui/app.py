@@ -533,7 +533,7 @@ def main():
     )
 
     with st.sidebar:
-        st.header("About this host")
+        st.header("About this tool")
         st.markdown(
             "- **On-prem steps** (Extract, direct data migration) require this app to run on "
             "a Windows machine with network access to the SSAS instance/SQL Server, "
