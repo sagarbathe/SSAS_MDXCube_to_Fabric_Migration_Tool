@@ -18,7 +18,15 @@ automates that process end-to-end:
 1. **Extracts** the full metadata of a running SSAS Multidimensional cube
    (dimensions, attributes, hierarchies, measure groups, measures,
    relationships, calculated members, KPIs, data source/DSV schema) via the
-   AMO (Analysis Management Objects) API.
+   **AMO (Analysis Management Objects)** API - Microsoft's .NET client
+   library (`Microsoft.AnalysisServices.dll`) for programmatically managing
+   SSAS objects, accessed from Python via `pythonnet`/`clr`
+   (`extractor/amo_client.py`) and from PowerShell directly (the
+   `demo-cube-setup/_deploy_amo_*.ps1` scripts use it to *create* the demo
+   cubes). AMO supports **Windows Integrated Authentication only** (no SQL
+   auth), and the connecting account needs the **Server Administrator**
+   (or Database Administrator) role on the SSAS instance - see
+   [Section 3](#3-prerequisites) and [Section 5](#5-phase-1-on-prem-ssas--sql-server).
 2. **Analyzes** the extracted metadata against known Microsoft Fabric
    **Direct Lake** constraints and recommends Direct Lake or Import mode
    *per cube*, with specific, itemized reasons for any fallback.
