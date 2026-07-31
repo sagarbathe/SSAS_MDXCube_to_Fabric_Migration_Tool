@@ -1,4 +1,4 @@
-# SSAS Multidimensional (MDX) Cube → Microsoft Fabric Migration Tool
+# SSAS Multidimensional (MDX) Cube â†’ Microsoft Fabric Migration Tool
 
 A code-based accelerator that migrates an on-premises **SQL Server Analysis
 Services (SSAS) Multidimensional** cube to **Microsoft Fabric**, producing a
@@ -9,9 +9,10 @@ backed by Delta tables in a Fabric Lakehouse.
 
 ## Getting Started: Get This Repo Onto Your Machine (Do This First)
 
-Every step below - including installing/running the optional [Web UI](#11-web-ui-optional-no-code-alternative-to-the-cli)
-in Section 11 - assumes you already have a local copy of this repository on
-whichever machine(s) you'll run it from. Do this before anything else:
+Every step below assumes you already have a local copy of this repository
+on whichever machine(s) you'll run it from (this is the pro-code/CLI-only
+version of the tool - see [Section 11](#11-looking-for-a-no-code-web-ui)
+if you want a browser-based UI instead). Do this before anything else:
 
 ```powershell
 git clone https://github.com/sagarbathe/SSAS_MDXCube_to_Fabric_Migration_Tool.git
@@ -20,7 +21,7 @@ cd SSAS_MDXCube_to_Fabric_Migration_Tool
 
 No `git` installed? Click the green **Code -> Download ZIP** button on the
 repo's GitHub page instead, then extract it anywhere on the machine. Either
-way, run every command in this README (and launch the Web UI) **from
+way, run every command in this README **from
 inside that folder** - it contains the pipeline code, `config/.env.template`
 (the source of the `.env` file you'll create in [Section 5](#5-phase-1-on-prem-ssas--sql-server)/
 [Section 6](#6-phase-2-fabric-connected)), and everything else referenced
@@ -74,7 +75,7 @@ automates that process end-to-end:
    in a target Fabric workspace via the Fabric REST API, using a service
    principal (unattended, repeatable automation).
 
-The tool is **generic** — it is not hard-coded to any one cube. Point it at
+The tool is **generic** â€” it is not hard-coded to any one cube. Point it at
 any SSAS Multidimensional server/database connection string and it will
 extract and convert that cube's structure.
 
@@ -93,7 +94,7 @@ minimal set of hand-off artifacts between them.
 | **Runs on** | A machine that can reach the SSAS server and the on-prem SQL Server | A machine that can reach the Fabric REST API and OneLake (`*.fabric.microsoft.com`) |
 | **Needs SSAS/AMO connectivity?** | Yes | No |
 | **Needs Fabric/internet connectivity?** | No | Yes |
-| **Steps** | extract → analyze → generate → report | deploy-lake → migrate-data (or upload-data) → deploy-model |
+| **Steps** | extract â†’ analyze â†’ generate â†’ report | deploy-lake â†’ migrate-data (or upload-data) â†’ deploy-model |
 | **Produces** | `cube_metadata.json`, `feasibility_report.json`, `SemanticModel/` (TMDL folder), `notebooks/*.py`, `MIGRATION_REPORT.md`, optionally a local Delta export | A Lakehouse + Semantic Model deployed into the target Fabric workspace |
 | **Consumes** | Nothing outside itself | The exact files produced by Phase 1 |
 
@@ -214,8 +215,8 @@ Phase 1 deliberately does **not** require internet or Fabric access - see
 | 1 | **x64 Python 3.10+** | `pyarrow`, `cryptography`, `deltalake` do not ship ARM64 Windows wheels | `python -c "import platform; print(platform.machine())"` prints `AMD64` |
 | 2 | Network access to `https://api.fabric.microsoft.com` and `https://onelake.dfs.fabric.microsoft.com` | All Phase 2 steps call the Fabric REST API / OneLake | `Test-NetConnection onelake.dfs.fabric.microsoft.com -Port 443` succeeds |
 | 3 | An Azure AD **App Registration (service principal)** with a client secret | Used for all Fabric REST API calls | See [Step 0](#step-0-one-time-fabric--service-principal-setup) |
-| 4 | Fabric tenant setting **"Service principals can use Fabric APIs"** enabled, scoped to a security group containing the SP | Fabric blocks app-only calls by default | Fabric Admin Portal → Tenant settings → Developer settings |
-| 5 | The service principal added as **Contributor** (or higher) on the target Fabric **workspace** | Needed to create Lakehouse/Semantic Model items | Workspace → Manage access → confirm the SP is listed |
+| 4 | Fabric tenant setting **"Service principals can use Fabric APIs"** enabled, scoped to a security group containing the SP | Fabric blocks app-only calls by default | Fabric Admin Portal â†’ Tenant settings â†’ Developer settings |
+| 5 | The service principal added as **Contributor** (or higher) on the target Fabric **workspace** | Needed to create Lakehouse/Semantic Model items | Workspace â†’ Manage access â†’ confirm the SP is listed |
 | 6 | The target Fabric workspace is on a **Fabric capacity** (not a Power BI Pro-only workspace) | Direct Lake and Lakehouse items require a Fabric capacity | Workspace settings show a Fabric capacity assigned |
 | 7 | (Only if using `migrate-data` instead of `upload-data`) network access from this same machine to the on-prem SQL Server, plus ODBC Driver 17/18 | `migrate-data` extracts and writes in one step, so it needs both networks reachable at once | `Test-NetConnection <SQL Server host>` succeeds from this machine |
 
@@ -287,8 +288,8 @@ python -m ssas_fabric_migrator.extractor.amo_client `
   names match your source schema.
 - If you instead get "Database ... not found" or a permission error, your
   session is not recognized as an AS admin - rerun elevated, or add your
-  account as an AS Server Administrator via SSMS (Object Explorer → server
-  → Properties → Security).
+  account as an AS Server Administrator via SSMS (Object Explorer â†’ server
+  â†’ Properties â†’ Security).
 
 **Limitations of this step:** the extractor reads dimensions, attributes,
 hierarchies, measure groups, measures, calculated members, KPIs, and the
@@ -448,9 +449,9 @@ az ad app credential reset --id <appId> --append --display-name "migration-tool-
 ```
 
 Then, in the **Fabric Admin Portal** (`https://app.fabric.microsoft.com/admin-portal/tenantSettings`):
-1. Developer settings → enable **"Service principals can use Fabric APIs"**,
+1. Developer settings â†’ enable **"Service principals can use Fabric APIs"**,
    scoped to a security group containing the new SP.
-2. In the target **workspace** → Manage access → Add the SP as **Contributor**.
+2. In the target **workspace** â†’ Manage access â†’ Add the SP as **Contributor**.
 
 **Validate:** the app registration, its secret, and its workspace role all
 exist; you have the Tenant ID, Client ID, Client Secret, and Workspace ID in
@@ -547,7 +548,7 @@ python -m ssas_fabric_migrator.cli.orchestrator --steps "upload-data" `
 - Compare `<N>` against the row count you recorded in Phase 1 (either the
   Step 1 metadata's implicit row source, or the optional export's printed
   counts).
-- In the Fabric portal, open the Lakehouse → Tables and confirm each table
+- In the Fabric portal, open the Lakehouse â†’ Tables and confirm each table
   is listed with the same row count and a "Delta" icon.
 - Optionally, use the Lakehouse SQL analytics endpoint to run
   `SELECT TOP 10 * FROM <table>` and spot-check values.
@@ -717,8 +718,6 @@ ssas_fabric_migrator/
                                             Phase 2, Step 6 (--target onelake / --target upload)
   deploy/fabric_client.py                  Phase 2, Steps 5/7 - Fabric REST API client
   cli/orchestrator.py                      Chains all steps via one command, phase-aware
-  ui/app.py                                Optional Streamlit web UI (Section 11) - thin
-                                            wrapper around orchestrator.py, no new logic
   sample-output/                           Reference MIGRATION_REPORT.md/feasibility_report.json/
                                             MANUAL_TRANSLATION_REQUIRED.md produced by a real run
                                             against AutoInsuranceCubeDemo (see Section 10)
@@ -728,7 +727,6 @@ demo-cube-setup/                           Reference: SQL + AMO scripts used to 
                                             validated against (not required to use
                                             the tool itself)
 requirements.txt
-requirements-ui.txt                        Additional dependency (streamlit) for the web UI
 ```
 
 ---
@@ -827,163 +825,10 @@ requirements-ui.txt                        Additional dependency (streamlit) for
   is therefore generated as Markdown, as a sibling of `definition/` rather
   than inside it.
 
-## 11. Web UI (optional, no-code alternative to the CLI)
+## 11. Looking for a no-code Web UI?
 
-A lightweight [Streamlit](https://streamlit.io) web app is included so
-users can drive the whole pipeline from a browser instead of typing CLI
-commands - it is a thin wrapper around the same modules the CLI uses
-(`orchestrator.py` and friends); it adds no new pipeline logic. `app.py`
-itself has **no dependency on pandas/pyarrow/pythonnet/deltalake** - it
-only shells out via subprocess to whichever Python interpreter you
-configure in its "Python executable" field, exactly like calling the CLI
-by hand.
-
-**Install the UI in its own isolated virtual environment - do NOT install
-`requirements-ui.txt` into the same environment as `requirements.txt`.**
-Streamlit's own pandas/pyarrow version constraints change across
-releases, and resolving it together with this repo's pinned pipeline
-dependencies can silently downgrade `pyarrow`/`pandas` to versions the
-pipeline wasn't tested against (or fail outright with
-`ResolutionImpossible`). Keeping them in separate environments avoids this
-entire class of conflict, present and future:
-
-```powershell
-<path-to-x64-python>\python.exe -m venv .venv-ui
-.venv-ui\Scripts\python.exe -m pip install -r requirements-ui.txt
-.venv-ui\Scripts\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py
-```
-
-`.streamlit/config.toml` (included in the repo) sets `toolbarMode =
-"minimal"`, which hides Streamlit's own built-in top-right **"Deploy"**
-button and Streamlit-Cloud menu options - those are unrelated to this
-tool (they publish to Streamlit Community Cloud) and are suppressed to
-avoid confusion, since this app is meant to be hosted on your own Windows
-machine per the topology described below, not on Streamlit Cloud. The
-same file also sets a dark `[theme]`/`[theme.sidebar]` using a **darker
-teal (`#00B7C3` for links, `#006D77` for `primaryColor`/buttons - chosen
-specifically for readable white text at ~6:1 contrast)** as a dominant
-accent - it drives `primaryColor`, `linkColor`, widget borders, and every
-clickable button
-(every `st.button`/`st.form_submit_button`/`st.link_button` in `app.py`
-uses `type="primary"`, so buttons render solid-filled teal, not just
-outlined) - on a near-black, teal-tinted dark canvas. Edit
-`.streamlit/config.toml` directly to adjust colors (or set `base =
-"light"` there to fall back to a light variant) if your organization has
-different branding preferences.
-
-Use the **same explicit x64 Python path** as [Section 4](#4-install-dependencies)
-only to *create* `.venv-ui` - once created, `.venv-ui\Scripts\python.exe`
-is itself the interpreter to use for every `pip`/`streamlit` command
-above (no need to reference the original x64 path again). This sidesteps
-the ARM64-resolves-by-default pitfall too, since a venv's own
-`python.exe`/`pip` always point at the interpreter it was created from.
-
-`requirements-ui.txt` pins `streamlit==1.58.0` specifically: it is the
-first release with **no upper bound on `pyarrow`** (just `pyarrow>=7.0`)
-while still allowing `pandas<4` - both compatible with this repo's
-`requirements.txt` pins (`pyarrow==25.0.0`, `pandas==3.0.5`). Nearby
-releases both older and newer add a `pyarrow` upper bound that conflicts
-with `pyarrow==25.0.0` (e.g. `1.51.0` needs `pyarrow<22`, `1.60.0` needs
-`pyarrow<25`) - since these are installed in separate environments this
-no longer matters for resolution, but it explains the exact version
-chosen if you ever need to bump it.
-
-Then open the printed `http://localhost:8501` URL in a browser. The app
-has tabs for: **Read Me** (live summary of this file, highlighting what
-the tool does/cannot do), **Configuration** (fills in the same `.env`
-values as `config/.env.template`), **Phase 1: On-Prem**, **Phase 2:
-Fabric**, and **Reports** (renders `MIGRATION_REPORT.md`,
-`feasibility_report.json`, `MANUAL_TRANSLATION_REQUIRED.md` in-browser).
-Each step button runs the exact same orchestrator subprocess as the CLI
-and streams its console output live. Every step also shows a short
-caption explaining what it does and why, so users don't need to consult
-this README while clicking through. **On the Configuration tab, set
-"Python executable" to the x64 `python.exe` that has `requirements.txt`
-installed** (not `.venv-ui`'s interpreter) - that is what actually runs
-each pipeline step (AMO extraction, Delta writes, Fabric REST calls).
-
-### Lakehouse selection and table-name prefixing
-
-The Phase 2 tab's Step 5 lets you either pick an existing Lakehouse from
-a dropdown (click **Refresh list of Lakehouses**, which lists items via
-the Fabric REST API) or create a new one by name - both map to the same
-underlying `deploy-lake` step and `FabricClient.create_lakehouse()`
-find-or-create logic. You can also set an optional **Delta table name
-prefix** (e.g. `stg_`), useful when sharing one Lakehouse across several
-cube migrations. The prefix applies only to the *physical* Delta table
-name written into the Lakehouse (and the corresponding TMDL partition
-binding) - it does not change the source SQL table name, the local
-export folder name, or the logical table name shown in the Power BI
-semantic model. This is also available on the CLI directly via
-`--table-prefix` on `orchestrator.py` (`generate`, `migrate-data`,
-`upload-data` steps) or `datamover/loader.py`.
-
-### Choosing a data-migration method in the UI
-
-Step 6 in the Phase 2 tab replaces the old separate "Air-gapped upload"
-tab with a single choice, right where you'd otherwise click "Migrate
-data": **Direct migration** (this host reaches both SQL Server and
-Fabric - runs `migrate-data`) or **Offline transfer** (export locally,
-then upload separately - runs the two-step `local export` +
-`upload-data` flow for isolated/air-gapped networks, see
-[Section 6, Option B](#6-phase-2-fabric-connected)). An expander next to
-this choice summarizes the other Fabric-native ingestion options from
-[Section 7](#7-alternative-data-migration-options-for-review) (Mirroring,
-Open Mirroring, Data Factory, Dataflows Gen2, Spark notebooks) that this
-tool does not implement, for teams evaluating alternatives.
-
-### Deployment topology: "any device with connectivity"
-
-The pipeline's on-prem steps (`extract`, `migrate-data`) still require
-`pythonnet`/AMO and direct network access to the SSAS instance and SQL
-Server - this is a Windows/.NET client-library constraint, not something a
-web UI can remove. So "any device" access is achieved by **hosting this
-one Streamlit app once, on a single Windows host that has connectivity to
-both the on-prem environment and Fabric**, and letting users elsewhere
-reach it over the network via a plain browser - no client install needed
-on their own machine:
-
-```powershell
-.venv-ui\Scripts\python.exe -m streamlit run ssas_fabric_migrator\ui\app.py --server.address 0.0.0.0 --server.port 8501
-```
-
-Then browse to `http://<that-host>:8501` from any laptop, tablet, or thin
-client on the corporate network/VPN. This mirrors the CLI's existing
-constraint (see [Section 2](#2-two-phase-design-on-prem-vs-fabric-connected))
-- only the single hosting machine needs the x64 Python environment and
-network line-of-sight; end users need nothing but a browser and a route
-to that host.
-
-### Login/access used by the UI
-
-The UI does not introduce any new authentication mechanism - it uses
-exactly what the CLI already uses, entered once via the Configuration tab
-and saved to the chosen `.env` file:
-
-- **On-prem SSAS (AMO)**: Windows Integrated Authentication only (SSAS
-  Multidimensional has no SQL-auth option). The Windows account the
-  Streamlit process runs as must hold the **Server Administrator** (or at
-  least Database Administrator) role on the SSAS instance. For a
-  centrally-hosted app, run it as a dedicated domain **service account**
-  granted that role, rather than relying on an individual's elevated
-  session.
-- **On-prem SQL Server** (`migrate-data`): SQL Authentication (recommended:
-  a dedicated **read-only** login with `db_datareader` on the source
-  database only) or Windows Authentication - whichever `pyodbc`/the
-  existing `loader.py` connection string is configured for.
-- **Fabric REST API/OneLake**: a **service principal** (`FABRIC_TENANT_ID`
-  / `FABRIC_CLIENT_ID` / `FABRIC_CLIENT_SECRET`), the same as the CLI
-  today. It must be added as a **Member or Contributor** of the target
-  workspace, and the tenant must have "Service principals can use Fabric
-  APIs" enabled (Fabric Admin Portal &rarr; Tenant settings &rarr;
-  Developer settings). This keeps all Fabric-side calls under one
-  auditable identity regardless of which user clicks the button in the
-  browser; adding per-user delegated login (MSAL interactive/device-code,
-  so actions are attributed to the individual analyst) is a natural
-  follow-up but is not implemented in this first version.
-
-**Secrets handling:** the "Save to env file" button writes plaintext
-values (including the Fabric client secret) to the `.env` file you
-specify - the same file the CLI reads. `config/.env` is already
-git-ignored; if you point the UI at a different path, make sure it is
-outside source control and readable only by the account running the app.
+This repository is the pro-code / CLI-only version of this tool - there is
+no Web UI here. If you'd rather drive the whole pipeline from a browser
+instead of the CLI, use the companion repo:
+[SSAS_MDXCube_to_Fabric_Migration_UI_Tool](https://github.com/sagarbathe/SSAS_MDXCube_to_Fabric_Migration_UI_Tool),
+which wraps this same orchestrator.py/pipeline logic in a Streamlit web app.
